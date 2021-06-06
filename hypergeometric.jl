@@ -1,6 +1,6 @@
 using Nemo, Test
 import Nemo: libarb, libflint, arf_struct, arb_struct, mag_struct
-import Nemo: expressify
+import Nemo: expressify, iszero, isfinite
 import Nemo: zero!, one!, add!, sub!, mul!, div!, inv!, coeff,
        setcoeff!, mullow, gamma, rgamma, solve, overlaps, sub
 
@@ -470,6 +470,19 @@ function zero!(z::nacb)
   return z
 end
 
+function iszero(a::nacb)
+  r = ccall((:acb_is_zero, libarb), Cint,
+            (Ref{nacb}, ),
+            a)
+  return r != 0
+end
+
+function isfinite(a::nacb)
+  r = ccall((:acb_is_finite, libarb), Cint,
+            (Ref{nacb}, ),
+            a)
+  return r != 0
+end
 
 function Base.one(::Type{narb})
   return one!(narb())
@@ -560,8 +573,8 @@ function mul!(z::narb, x::narb, y::fmpz, p::Int)
   return z
 end
 
-function mul(a::narb, b::fmpz, p::Int)
-  return mul!(narb(), a, b, p)
+function mul(a::Union{narb, nacb}, b::fmpz, p::Int)
+  return mul!(typeof(a)(), a, b, p)
 end
 
 function mul!(z::nacb, x::nacb, y::fmpz, p::Int)
@@ -1718,10 +1731,10 @@ function fraction_bound_special(f, g, μ::Int, τ::Int, n::fmpz, p::Int)
     setcoeff!(F, j, nacb(coeff(f, j), p))
     setcoeff!(G, j, nacb(coeff(g, μ+j), p))
   end
-  rat = div(num, den, τ, p)
+  rat = div_series(F, G, τ, p)
   res = zero(narb)
   for j in 0:τ-1
-    add!(res, res, abs(nacb(n*ncoeff(rat, j), p)), p)
+    add!(res, res, abs(mul(coeff(rat, j), n, p), p), p)
   end
   return res  
 end
@@ -1736,9 +1749,16 @@ function equ_bound(
   N::Int,
   p::Int) where T
 
-#println("equ_bound called")
+#println()
+#println("**** equ_bound called ****")
 #@show Pθ
 #@show Px
+#@show λ
+#@show ns
+#@show αs
+#@show τ
+#@show N
+#@show p
 
   Fθ = parent(Pθ[1])
   θ = gen(Fθ)
@@ -1789,7 +1809,7 @@ function equ_bound(
   # collect the multiplicities of the ns
   nμ = Tuple{fmpz, Int}[]
   for n in ns
-    if !empty(nμ) && nμ[end][1] == n
+    if !isempty(nμ) && nμ[end][1] == n
       nμ[end] = (n, nμ[end][2]+1)
     else
       push!(nμ, (n, 1))
@@ -1803,8 +1823,8 @@ function equ_bound(
   for (n, μ) in nμ
     majorant_bound_normal(maj, pf, Q0, αs, curτ, curN, n - 1, p)
     curτ += μ
-    majorant_bound_special(maj, pf, Q0, curτ, μ, curN, n, p)
-    curN = fmpz(n + 1)
+    majorant_bound_special(maj, pf, Q0, μ, curτ, n, p)
+    curN = n + 1
   end
   majorant_bound_normal(maj, pf, Q0, αs, curτ, curN, fmpz(-1), p)
 #@show maj
@@ -1825,6 +1845,21 @@ function majorant_bound_normal(
     max!(i, i, fraction_bound_normal(j, Q0, αs, τ, n0, n1, p), p)
   end
 end
+
+function majorant_bound_special(
+  maj::hyp_majorant{narb},
+  pf::hyp_majorant{S},
+  Q0::S,
+  μ::Int,
+  τ::Int,
+  n::fmpz,
+  p::Int) where {S, T}
+
+  for (i, j) in zip(coeffs(maj), coeffs(pf))
+    max!(i, i, fraction_bound_special(j, Q0, μ, τ, n, p), p)
+  end
+end
+
 
 # u is a sxτxν array of the last s coefficients
 # return sxτxν array of the "normalized residues"
@@ -1866,8 +1901,7 @@ end
 
 # Return δ by ν matrix M such that for any vector iv of ν initial values the
 # solution f(z) determined by these initial values and its derivatives is M.iv.
-# Currently doesn't work well when δ > 1 and z contains 0. This case is
-# fortunately not needed.
+# Currently doesn't work well when z contains 0.
 function eval_basis(
   Pθ::Vector,
   Px::Vector,
@@ -1879,7 +1913,7 @@ function eval_basis(
   invz::nacb,     # 1/z only used if normal = false
   p::Int) where T
 
-#println("eval_basis")
+#println("**** eval_basis called")
 #@show Pθ
 #@show Px
 #@show (λ, ns)
@@ -1912,7 +1946,7 @@ function eval_basis(
   # each coefficient is an array of ν elements of nacb
   Σ = [Vector{nacb}[] for i in 1:δ]
 
-  #
+  # the ns will be consumed as we sum past them
   ns = deepcopy(ns)
   iv = [[i == j ? one(F) : zero(F) for i in 1:ν] for j in 1:ν]
 
@@ -1921,7 +1955,16 @@ function eval_basis(
 
   changedcount = 0
   N = 0
-  while N < maxN
+  while true
+    # for q_residual, we cannot stop if we are within s of the next root
+    # however, we promised to calculated a solution for each basis elem, so we
+    # cannot stop until all roots are consumed. This is a big problem if any
+    # root in ns is large.
+    may_stop = isempty(ns) #|| N+s < ns[1]
+    if N > maxN
+      error("internal error: parameters too large")
+    end
+
     # evaluate the next coefficient u_n
     # the evaluation is currently done in the field F and subject to blowup
     # TODO switch to ball arithmetic after a few steps
@@ -1989,6 +2032,11 @@ function eval_basis(
 
     mul!(zn, zn, z, p)
     N += 1
+
+    if !may_stop
+      continue
+    end
+
     if !changed
       if (changedcount += 1) > 1
         break
@@ -1997,6 +2045,9 @@ function eval_basis(
         changedcount = 0
     end
   end
+
+  # for the residual it is required that none of N, N+1, ..., N+s-1 are in ns
+  @assert isempty(ns) || N+s <= ns[1]
 
   # c/((1-z)^k1*(1-z^2)^k2) is supposed to majorize 1/Px[1+r], r = deg_θ(P)
   # exp(maj(z)) is the hhat(z)
@@ -2032,7 +2083,8 @@ function eval_basis(
     # For each j, the remainder sum_{i>=N} u_{i,j}*z^(λ+i) is majorized by
     #     R(z) = z^(λ+N)*g(z)*exp(maj(z))*c/((1-z)^k1*(1-z^2)^k2)
     #         TODO!!  when there are large initial roots so that ns is still
-    #                 not empty increase g(z) accordingly
+    #                 not empty increase g(z) accordingly. for now we just
+    @assert isempty(ns)
 
     # The m^th derivative error |f^m(z) - f_N^m(z)| can be bounded by the
     # ε coefficients of R(|z|+ε)*sum_{j<?}log(|z|+ε)^j/j!   ??????
@@ -2070,10 +2122,18 @@ function eval_basis(
       add!(f, f, 1, p)
     end
     finalerror[l] = mullow(finalerror[l], f, δ, p)
-#@show finalerror[l]
   end
 
   # evaluate the polynomials in log(z)
+  #    sum_{i,j} c_{i,j} z^(λ-d+i) log^j(z)/j!
+  #
+  # Problems for z = 0: For c{i,j} == 0, the term should be ignored. Otherwise
+  #    z^a*log^j(z) = 0   if ...
+  #                 = 1   if ...
+  #                 = nan if ...
+  #
+  # However, the i sum has already been summed :(
+
   logz = normal ? log(z, p) : neg!(log(invz, p))
   zλ = normal ? pow(z, λ, p) : pow(invz, -λ, p)
   M = nacb_mat(δ, ν)
@@ -2084,8 +2144,11 @@ function eval_basis(
     else
       t = Σ[1+d][1+i][l]
       while (i -= 1) >= 0
-        div!(t, t, i + 1, p)
-        mul!(t, t, logz, p)
+        # hack for 0*log(z) when z=0
+        if !iszero(t)
+          div!(t, t, i + 1, p)
+          mul!(t, t, logz, p)
+        end
         add!(t, t, Σ[1+d][1+i][l], p)
       end
     end
@@ -2172,6 +2235,16 @@ function pi!(z::narb, p::Int)
   ccall((:arb_const_pi, libarb), Nothing,
         (Ref{narb}, Int),
         z, p)
+  return z
+end
+
+function pi!(z::nacb, p::Int)
+  GC.@preserve z begin
+    t = ccall((:acb_real_ptr, libarb), Ptr{narb}, (Ref{nacb},), z)
+    ccall((:arb_const_pi, libarb), Nothing, (Ptr{narb}, Int), t, p)
+    t = ccall((:acb_imag_ptr, libarb), Ptr{narb}, (Ref{nacb},), z)
+    ccall((:arb_zero, libarb), Nothing, (Ptr{narb},), t)
+  end
   return z
 end
 
@@ -2400,7 +2473,7 @@ end
 
 #### tests #####################################################################
 
-# TODO maybe use the acb type with its parent precision for testing
+# TODO! use the acb type with its parent precision for testing
 function Base.:(+)(x::Int, y::nacb)
   return add!(nacb(), y, x, precision_inc(y, 60))
 end
@@ -2465,7 +2538,7 @@ function Base.:/(a::nacb, b::Int)
   return return div!(nacb(), a, b, p+10)
 end
 
-function nacb(a::Rational, p::Int)
+function nacb(a::Union{Int, Rational}, p::Int)
   return nacb(QQ(a), p)
 end
 
@@ -2545,6 +2618,14 @@ end
 
 println("************************** tests *****************************")
 
+@testset "singular points" begin
+  f = compute_pfq(map(QQ,[1,2,3]), map(QQ,[4,5]), nacb(QQ(1),53), 53)
+  @test overlaps(f, 120-12*pi!(nacb(), 53)^2)
+
+  f = compute_pfq(map(QQ,[5,4,3]), map(QQ, [2,1]), nacb(QQ(1),53), 53)
+  @test !isfinite(f)
+end
+
 @testset "algebraic cases" begin
   for j in [nacb(1//7+2000, 100), nacb(1//7-2000, 100),
             nacb(1//7+1728, 100), nacb(1//7-1728, 100),
@@ -2553,18 +2634,18 @@ println("************************** tests *****************************")
             nacb(1//7+2, 100), nacb(1//7-2, 100)]
     f1 = pfq([-1//12,1//4],[2//3],1728/j)
     f2 = pfq([1//4, 7//12],[4//3],1728/j)
-    t = j^(1//3)/3*f1/f2
-    @test overlaps(j, 27*(t^4+8*t)^3/(t^3-1)^3)
+    t = j/3^3*f1^3/f2^3
+    @test overlaps(j, 27*t*(t+8)^3/(t-1)^3)
 
     f1 = pfq([-1//24,7//24],[3//4],1728/j)
     f2 = pfq([5//24,13//24],[5//4],1728/j)
-    t = j^(1//4)/2*f1/f2
-    @test overlaps(j, 16*(t^8+14*t^4+1)^3/(t^5-t)^4)
+    t = j/2^4*f1^4/f2^4
+    @test overlaps(j, 16*(t^2+14*t+1)^3/(t*(t-1)^4))
 
     f1 = pfq([-1//60,19//60],[4//5],1728/j)
     f2 = pfq([11//60,31//60],[6//5],1728/j)
-    t = j^(1//5)*f1/f2
-    @test overlaps(j, (t^20+228*t^15+494*t^10-228*t^5+1)^3/(t^11-11*t^6-t)^5)
+    t = j*f1^5/f2^5
+    @test overlaps(j, (t^4+228*t^3+494*t^2-228*t+1)^3/(t*(t^2-11*t-1)^5))
 
     f1 = pfq([-1//42,13//42,9//14],[4//7,6//7],1728/j)
     f2 = pfq([5//42,19//42,11//14],[5//7,8//7],1728/j)
@@ -2619,7 +2700,6 @@ function run_bench(a, b, z, p, fx = "", fy = "")
   @time f = compute_pfq(A, B, zz, p)
   @assert isempty(fx) || overlaps(set!(narb(), fx, p), real(f))
   @assert isempty(fy) || overlaps(set!(narb(), fy, p), imag(f))
-
   bits_lost = p - precision(f)
 @show bits_lost
   return bits_lost
