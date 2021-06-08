@@ -1,6 +1,6 @@
 using Nemo, Test
 import Nemo: libarb, libflint, arf_struct, arb_struct, mag_struct
-import Nemo: expressify, iszero, isfinite
+import Nemo: expressify, iszero, isfinite, contains_zero
 import Nemo: zero!, one!, add!, sub!, mul!, div!, inv!, coeff,
        setcoeff!, mullow, gamma, rgamma, solve, overlaps, sub
 
@@ -470,11 +470,46 @@ function zero!(z::nacb)
   return z
 end
 
+function iszero(a::narb)
+  r = ccall((:arb_is_zero, libarb), Cint,
+            (Ref{narb}, ),
+            a)
+  return r != 0
+end
+
 function iszero(a::nacb)
   r = ccall((:acb_is_zero, libarb), Cint,
             (Ref{nacb}, ),
             a)
   return r != 0
+end
+
+function contains_zero(a::narb)
+  r = ccall((:arb_contains_zero, libarb), Cint,
+            (Ref{narb}, ),
+            a)
+  return r != 0
+end
+
+function contains_zero(a::nacb)
+  r = ccall((:acb_contains_zero, libarb), Cint,
+            (Ref{nacb}, ),
+            a)
+  return r != 0
+end
+
+function indeterminate!(z::narb)
+  ccall((:arb_indeterminate, libarb), Nothing,
+        (Ref{narb}, ),
+        z)
+  return z
+end
+
+function indeterminate!(z::nacb)
+  ccall((:acb_indeterminate, libarb), Nothing,
+        (Ref{nacb}, ),
+        z)
+  return z
 end
 
 function isfinite(a::nacb)
@@ -882,16 +917,16 @@ function inv!(z::nacb, x::nacb, p::Int)
   return z
 end
 
-function Base.inv(x::nacb, p::Int)
-  return inv!(nacb(), x, p)
+function Base.inv(a::narb, p::Int)
+  return inv!(narb(), a, p)
 end
 
-function Base.abs(x::nacb, p::Int)
-  z = narb()
-  ccall((:acb_abs, libarb), Nothing,
-        (Ref{narb}, Ref{nacb}, Int),
-        z, x, p)
-  return z
+function Base.inv(a::nacb, p::Int)
+  return inv!(nacb(), a, p)
+end
+
+function Base.abs(a::nacb, p::Int)
+  return abs!(narb(), a, p)
 end
 
 function sqrt!(z::nacb, x::nacb, p::Int)
@@ -901,32 +936,60 @@ function sqrt!(z::nacb, x::nacb, p::Int)
   return z
 end
 
-function log!(z::nacb, x::nacb, p::Int)
-  ccall((:acb_log, libarb), Nothing,
-      (Ref{nacb}, Ref{nacb}, Int),
-      z, x, p)
+function abs!(z::narb, a::narb)
+  ccall((:arb_abs, libarb), Nothing,
+        (Ref{narb}, Ref{narb}),
+        z, a)
   return z
 end
 
-function pow!(z::narb, x::narb, y::UInt, p::Int)
+function abs!(z::narb, a::nacb, p::Int)
+  ccall((:arb_abs, libarb), Nothing,
+        (Ref{narb}, Ref{nacb}, Int),
+        z, a, p)
+  return z
+end
+
+function log!(z::narb, a::narb, p::Int)
+  ccall((:arb_log, libarb), Nothing,
+        (Ref{narb}, Ref{narb}, Int),
+        z, a, p)
+  return z
+end
+
+function log!(z::nacb, a::nacb, p::Int)
+  ccall((:acb_log, libarb), Nothing,
+        (Ref{nacb}, Ref{nacb}, Int),
+        z, a, p)
+  return z
+end
+
+function pow!(z::narb, a::narb, b::UInt, p::Int)
   ccall((:arb_pow_ui, libarb), Nothing,
       (Ref{narb}, Ref{narb}, UInt, Int),
-      z, x, y, p)
+      z, a, b, p)
   return z
 end
 
-function pow!(z::nacb, x::nacb, y::Int, p::Int)
+function pow!(z::narb, a::narb, b::fmpq, p::Int)
+  ccall((:arb_pow_fmpq, libarb), Nothing,
+      (Ref{narb}, Ref{narb}, Ref{fmpq}, Int),
+      z, a, b, p)
+  return z
+end
+
+function pow!(z::nacb, a::nacb, b::Int, p::Int)
   ccall((:acb_pow_si, libarb), Nothing,
       (Ref{nacb}, Ref{nacb}, Int, Int),
-      z, x, y, p)
+      z, a, b, p)
   return z
 end
 
-function pow!(z::nacb, x::nacb, y::fmpq, p::Int)
-  Y = narb(y, p)
+function pow!(z::nacb, a::nacb, b::fmpq, p::Int)
+  B = narb(b, p)
   ccall((:acb_pow_arb, libarb), Nothing,
       (Ref{nacb}, Ref{nacb}, Ref{narb}, Int),
-      z, x, Y, p)
+      z, a, B, p)
   return z
 end
 
@@ -1134,16 +1197,16 @@ end
 function narb(x::fmpq, p::Int)
   z = narb()
   ccall((:arb_set_fmpq, libarb), Nothing,
-      (Ref{narb}, Ref{fmpq}, Int),
-      z, x, p)
+        (Ref{narb}, Ref{fmpq}, Int),
+        z, x, p)
   return z
 end
 
 function nacb(x::fmpq, p::Int)
   z = nacb()
   ccall((:acb_set_fmpq, libarb), Nothing,
-      (Ref{nacb}, Ref{fmpq}, Int),
-      z, x, p)
+        (Ref{nacb}, Ref{fmpq}, Int),
+        z, x, p)
   return z
 end
 
@@ -1806,30 +1869,34 @@ function equ_bound(
   pf = partial_fractions(f, k1, k2)
 #@show pf
 
-  # collect the multiplicities of the ns
-  nμ = Tuple{fmpz, Int}[]
-  for n in ns
-    if !isempty(nμ) && nμ[end][1] == n
-      nμ[end] = (n, nμ[end][2]+1)
-    else
-      push!(nμ, (n, 1))
-    end
-  end
-
   # start with 0's and take max's along intervals all the way from N to ∞
   maj = hyp_majorant{narb}(pf)
   curN = fmpz(N)
   curτ = τ
-  for (n, μ) in nμ
-    majorant_bound_normal(maj, pf, Q0, αs, curτ, curN, n - 1, p)
-    curτ += μ
-    majorant_bound_special(maj, pf, Q0, μ, curτ, n, p)
-    curN = n + 1
+
+  if !isempty(ns)
+    # collect the multiplicities of the ns
+    nμ = Tuple{fmpz, Int}[]
+    for n in ns
+      if !isempty(nμ) && nμ[end][1] == n
+        nμ[end] = (n, nμ[end][2]+1)
+      else
+        push!(nμ, (n, 1))
+      end
+    end
+
+    for (n, μ) in nμ
+      majorant_bound_normal(maj, pf, Q0, αs, curτ, curN, n - 1, p)
+      curτ += μ
+      majorant_bound_special(maj, pf, Q0, μ, curτ, n, p)
+      curN = n + 1
+    end
   end
+
   majorant_bound_normal(maj, pf, Q0, αs, curτ, curN, fmpz(-1), p)
-#@show maj
+
   # 1/Px[1+r] is majorized by abs(1/c)/((1-x)^max(0,k1-k2)*(1-x^2)^k2)
-  return (abs(nacb(inv(c), p), p), max(0,k1-k2), k2, maj, curτ)
+  return (inv(abs(nacb(c, p), p), p), max(0,k1-k2), k2, maj, curτ)
 end
 
 function majorant_bound_normal(
@@ -1858,6 +1925,27 @@ function majorant_bound_special(
   for (i, j) in zip(coeffs(maj), coeffs(pf))
     max!(i, i, fraction_bound_special(j, Q0, μ, τ, n, p), p)
   end
+end
+
+# return upperbound on |a|
+function magnitude(a::nacb, p)
+  mag = narb()
+  GC.@preserve a begin
+    t = mag_struct(0, 0)
+    ccall((:mag_init, libarb), Nothing,
+          (Ref{mag_struct},),
+          t)
+    ccall((:acb_get_mag, libarb), Nothing,
+          (Ref{mag_struct}, Ref{nacb}),
+          t, a)
+    ccall((:arb_set_interval_mag, libarb), Nothing,
+          (Ref{narb}, Ref{mag_struct}, Ref{mag_struct}, Int),
+          mag, t, t, p)
+    ccall((:mag_clear, libarb), Nothing,
+          (Ref{mag_struct},),
+          t)
+  end
+  return mag
 end
 
 
@@ -1889,6 +1977,88 @@ function q_residual(Pθ, Px, u, λ::T, N::Int, τ::Int, ν::Int) where T
   return q
 end
 
+function tail_bound(Pθ, Px, u, λ, ns, αs, zmag, δ, N, τ, ν, p)
+
+  s = length(Pθ) - 1
+
+  # for the residual it is required that none of N, N+1, ..., N+s-1 are in ns
+  @assert isempty(ns) || N+s <= ns[1]
+
+  # c/((1-z)^k1*(1-z^2)^k2) is supposed to majorize 1/Px[1+r], r = deg_θ(P)
+  # exp(maj(z)) is the hhat(z)
+  # finalτ is strict bound on the power of log(z) in the real solution f(z)
+  (c, k1, k2, maj, finalτ) = equ_bound(Pθ, Px, λ, ns, αs, τ, N, p)
+
+  q = q_residual(Pθ, Px, u, λ, N, τ, ν)
+
+  # TODO: if q != 0 and zmag >= 1, we don't know if the series converges
+
+  # The error bounds need more work
+  Er = [narb_poly() for l in 1:ν]
+  for l in 1:ν
+    f = zero(narb_poly)
+    for i in 0:s-1
+      # first take the max's of coeffs of log(z)^j/j!
+      m = zero(narb)
+      for j in 0:τ-1
+        max!(m, m, abs(nacb((N+i)*q[1+i,1+j,l], p), p), p)
+      end
+      setcoeff!(f, i, m)
+    end
+    g = mullow(f, exp_series(neg!(series(maj, s, p)), s, p), s, p)
+    for i in 0:s-1
+      setcoeff!(g, i, max(zero(narb), div(coeff(g, i), N+i, p), p))
+    end
+
+    # f(z) is given by sum_{i,j} u_{i,j}*z^(λ+i)*log(z)^j/j!
+    # The sum on j is finite and we have evaluated the sum f_N(z) on i<N.
+    # For each j, the remainder sum_{i>=N} u_{i,j}*z^(λ+i) is majorized by
+    #     R(z) = z^(λ+N)*g(z)*exp(maj(z))*c/((1-z)^k1*(1-z^2)^k2)
+    #         TODO!!  when there are large initial roots so that ns is still
+    #                 not empty increase g(z) accordingly. for now we just
+    @assert isempty(ns)
+
+    # The m^th derivative error |f^m(z) - f_N^m(z)| can be bounded by the
+    # ε coefficients of R(|z|+ε)*sum_{j<?}log(|z|+ε)^j/j!   ??????
+
+    # z^(λ+N)
+    zeval = narb_poly(zmag, 1)
+    Er[l] = pow_series(zeval, narb(λ + N, p), δ, p) # TODO
+
+    # c/((1-z)^k1*(1-z^2)^k2)
+    mul!(Er[l], Er[l], c, p)
+    f = pow_series(inv_series(sub(1, zeval, p), δ, p), narb(k1), δ, p)
+    Er[l] = mullow(Er[l], f, δ, p)
+    z2eval = mullow(zeval, zeval, δ, p)
+    f = pow_series(inv_series(sub(1, z2eval, p), δ, p), narb(k2), δ, p)
+    Er[l] = mullow(Er[l], f, δ, p)
+
+    # g(z)
+    t = one(narb_poly)
+    f = narb_poly(coeff(g, 0))
+    for i in 1:s-1
+      t = mullow(t, zeval, δ, p)
+      add!(f, f, mul(t, coeff(g, i), p), p)
+    end
+    Er[l] = mullow(Er[l], f, δ, p)
+
+    # exp(maj(z))
+    f = exp_series(eval_series(maj, zeval, δ, p), δ, p)
+    Er[l] = mullow(Er[l], f, δ, p)
+
+    # sum_{j<finalτ} log(z)^j/j!
+    logzeval = log_series(zeval, δ, p)
+    f = one(narb_poly)
+    for j in finalτ-1:-1:1
+      div!(f, mullow(f, logzeval, δ, p), narb(j), p)
+      add!(f, f, 1, p)
+    end
+    Er[l] = mullow(Er[l], f, δ, p)
+  end
+
+  return Er
+end
+
 function get_multiplicity!(ns::Vector{fmpz}, iv::Vector{Vector{T}}, n::Int) where T
   @assert length(ns) == length(iv)
   nextu = Vector{T}[]
@@ -1899,9 +2069,199 @@ function get_multiplicity!(ns::Vector{fmpz}, iv::Vector{Vector{T}}, n::Int) wher
   return nextu
 end
 
+# given a bound on |z|, compute z^a*log(z)^j/j!
+# at z = 0: z^a*log^j(z) = nan if re(a) < 0
+#                          0   elseif re(a) > 0
+#                          1   elseif a = 0 && j == 0
+#                          nan else
+# TODO: get this working for T != fmpq
+function fancypow_at_0(zmag::narb, a::T, j::Int, p::Int) where T <: fmpq
+  r = zero(nacb)
+  if a < 0
+    indeterminate!(r)
+  elseif a > 0
+    if iszero(zmag)
+      zero!(r)
+    else
+      s = narb()
+      t = narb()
+      # |z|^a * |log(|z|) +- Pi|^j/j!
+      pow!(s, zmag, a, p)
+      log!(t, zmag, p)
+      abs!(t, t)
+      add!(t, t, 4, p)
+      pow!(t, t, UInt(j), p)
+      div!(t, t, factorial(j, p), p)
+      mul!(s, s, t, p)
+      add_error!(r, s)
+    end
+  elseif a == 0 && j == 0
+    one!(r)
+  else
+    indeterminate!(r)
+  end
+  return r
+end
+
+
+function eval_basis_at_0(
+  Pθ::Vector,
+  Px::Vector,
+  λ::T, ns::Vector{fmpz}, # indicial roots λ+ns[1], λ+ns[2], ..., λ+ns[ν]
+  αs::Vector{T},  # all indicial roots
+  z::nacb,
+  δ::Int,         # calculate f(z), f'(z), ... f^(δ-1)(z)
+  p::Int) where T
+
+#println("**** eval_basis_at_0 called")
+#@show Pθ
+#@show Px
+#@show (λ, ns)
+#@show αs
+#@show z
+
+  # zmag is an exact nonnegative value giving an upper bound on |z|
+  zmag = magnitude(z, p)
+
+  ν = length(ns)    # number of initial conditions
+  τ = 0             # strict bound on the power of log(z) thus far
+  maxN = 10+p       # max number of terms to sum
+
+  @assert length(ns) > 0
+  @assert ns[1] == 0
+
+  s = length(Pθ) - 1
+  @assert s > 0
+
+  Fθ = parent(Pθ[1])
+  θ = gen(Fθ)
+  F = base_ring(Fθ)
+
+  # u is an array of the last s solutions
+  # each solution is an array of coefficients of log^k(z)/k!  0 <= k < τ
+  # each coefficient is an array of ν elements of F
+  u = [Vector{T}[] for i in 1:s]
+
+  # M is the matrix answer
+  M = nacb_mat(δ, ν)
+
+  # the ns will be consumed as we sum past them
+  ns = deepcopy(ns)
+  iv = [[i == j ? one(F) : zero(F) for i in 1:ν] for j in 1:ν]
+
+  t = nacb()
+  zn = one(nacb)
+
+  changedcount = 0
+  N = 0
+  while true
+    # for q_residual, we cannot stop if we are within s of the next root
+    # however, we promised to calculated a solution for each basis elem, so we
+    # cannot stop until all roots are consumed. This is a big problem if any
+    # root in ns is large.
+    may_stop = isempty(ns) #|| N+s < ns[1]
+    if N > maxN
+      error("internal error: parameters too large")
+    end
+
+    # evaluate the next coefficient u_n
+    # the evaluation is currently done in the field F and subject to blowup
+    # TODO switch to ball arithmetic after a few steps
+    Pn = map(a -> a(θ + (λ + N)), Pθ)
+    un = get_multiplicity!(ns, iv, N)
+    rhs = [[zero(F) for k in 1:ν] for j in 1:τ]
+    for i in 1:s
+      # Pn[1 + i] is a polynomial in θ. Apply it to u[i] where θ is
+      # the shift operator and sub result from rhs
+      for k in 0:degree(Pn[1 + i])
+        for j in 1:length(u[i])-k, l in 1:ν
+          sub!(rhs[j][l], rhs[j][l], coeff(Pn[1+i], k)*u[i][j + k][l])
+        end
+      end
+    end
+    # μ = number of initial conditions at λ + N = multiplicity of root
+    μ = length(un)
+    for i in 0:μ-1
+      @assert iszero(coeff(Pn[1], i))
+    end
+    for j in 1:τ
+      push!(un, rhs[j])
+    end
+    for i in 1:τ, l in 1:ν
+      for j in 1:i-1
+        un[1+μ+τ-i][l] -= coeff(Pn[1], μ+j)*un[1+μ+τ-i+j][l]
+      end
+      un[1+μ+τ-i][l] //= coeff(Pn[1], μ)
+    end
+    # trim zeros off un
+    while length(un) > τ && all(iszero, un[end])
+      pop!(un)
+    end
+
+    τ = max(τ, length(un))
+    pop!(u)
+    pushfirst!(u, un)
+
+    # add un*z^N to sum
+    changed = false
+    znrow = [[deepcopy(un[1+j][l]) for l in 1:ν] for j in 0:τ-1]
+    for d in 0:δ-1, l in 1:ν
+      if d > 0
+        # differentiate un
+        for j in 0:τ-1          
+          mul!(znrow[1+j][l], znrow[1+j][l], λ+N-d+1, p)
+          if j+1 < τ
+            add!(znrow[1+j][l], znrow[1+j][l], znrow[1+j+1][l], p)
+          end
+        end
+      end
+      zero!(t)
+      for j in 0:τ-1
+        if !iszero(znrow[1+j][l])
+          add!(t, t, mul(fancypow_at_0(zmag, λ+N-d, j, p), znrow[1+j][l], p), p)
+        end
+      end
+      add!(t, t, M[1+d,l], p)
+      changed = changed || !overlaps(M[1+d,l], t)
+      setindex!(M, 1+d,l, t)
+    end
+
+    N += 1
+
+    if !may_stop
+      continue
+    end
+
+    if !changed
+      if (changedcount += 1) > 1
+        break
+      end
+    else
+        changedcount = 0
+    end
+  end
+
+  if iszero(zmag) && λ + N > 0
+    # all of the tail terms are zero
+    return M
+  end
+
+  Er = tail_bound(Pθ, Px, u, λ, ns, αs, zmag, δ, N, τ, ν, p)
+
+  for d in 0:δ-1, l in 1:ν
+    t = M[1+d,l]
+    er = mul(coeff(Er[l], d), factorial(d, p), p)
+    add_error!(t, er)
+    setindex!(M, 1+d, l, t)
+  end
+  return M
+end
+
+
 # Return δ by ν matrix M such that for any vector iv of ν initial values the
 # solution f(z) determined by these initial values and its derivatives is M.iv.
-# Currently doesn't work well when z contains 0.
+#  f(z) = sum_{i,j} z^(λ-0+i)*log(z)^j/j!*( u[i,j] )
+# f'(z) = sum_{i,j} z^(λ-1+i)*log(z)^j/j!*( (λ+i)*u[i,j] + u[i,j+1] )
 function eval_basis(
   Pθ::Vector,
   Px::Vector,
@@ -1919,6 +2279,10 @@ function eval_basis(
 #@show (λ, ns)
 #@show αs
 #@show z
+
+  if contains_zero(z)
+    return eval_basis_at_0(Pθ, Px, λ, ns, αs, z, δ, p)
+  end
 
   p += 20
 
@@ -1989,10 +2353,8 @@ function eval_basis(
       push!(un, rhs[j])
     end
     for i in 1:τ
-      for j in 1:i-1
-        for l in 1:ν
-          un[1+μ+τ-i][l] -= coeff(Pn[1], μ+j)*un[1+μ+τ-i+j][l]
-        end
+      for j in 1:i-1, l in 1:ν
+        un[1+μ+τ-i][l] -= coeff(Pn[1], μ+j)*un[1+μ+τ-i+j][l]
       end
       for l in 1:ν
         un[1+μ+τ-i][l] //= coeff(Pn[1], μ)
@@ -2046,94 +2408,10 @@ function eval_basis(
     end
   end
 
-  # for the residual it is required that none of N, N+1, ..., N+s-1 are in ns
-  @assert isempty(ns) || N+s <= ns[1]
-
-  # c/((1-z)^k1*(1-z^2)^k2) is supposed to majorize 1/Px[1+r], r = deg_θ(P)
-  # exp(maj(z)) is the hhat(z)
-  # finalτ is strict bound on the power of log(z) in the real solution f(z)
-  (c, k1, k2, maj, finalτ) = equ_bound(Pθ, Px, λ, ns, αs, τ, N, p)
-#@show c
-#@show k1
-#@show k2
-#@show maj
-
-  q = q_residual(Pθ, Px, u, λ, N, τ, ν)
-#@show q
-
-  # The error bounds need more work
-  finalerror = [narb_poly() for l in 1:ν]
-  for l in 1:ν
-    f = zero(narb_poly)
-    for i in 0:s-1
-      # first take the max's of coeffs of log(z)^j/j!
-      m = zero(narb)
-      for j in 0:τ-1
-        max!(m, m, abs(nacb((N+i)*q[1+i,1+j,l], p), p), p)
-      end
-      setcoeff!(f, i, m)
-    end
-    g = mullow(f, exp_series(neg!(series(maj, s, p)), s, p), s, p)
-    for i in 0:s-1
-      setcoeff!(g, i, max(zero(narb), div(coeff(g, i), N+i, p), p))
-    end
-
-    # f(z) is given by sum_{i,j} u_{i,j}*z^(λ+i)*log(z)^j/j!
-    # The sum on j is finite and we have evaluated the sum f_N(z) on i<N.
-    # For each j, the remainder sum_{i>=N} u_{i,j}*z^(λ+i) is majorized by
-    #     R(z) = z^(λ+N)*g(z)*exp(maj(z))*c/((1-z)^k1*(1-z^2)^k2)
-    #         TODO!!  when there are large initial roots so that ns is still
-    #                 not empty increase g(z) accordingly. for now we just
-    @assert isempty(ns)
-
-    # The m^th derivative error |f^m(z) - f_N^m(z)| can be bounded by the
-    # ε coefficients of R(|z|+ε)*sum_{j<?}log(|z|+ε)^j/j!   ??????
-
-    # z^(λ+N)
-    zeval = narb_poly(abs(z, p), 1)
-    finalerror[l] = pow_series(zeval, narb(λ + N, p), δ, p) # TODO
-
-    # c/((1-z)^k1*(1-z^2)^k2)
-    mul!(finalerror[l], finalerror[l], c, p)
-    f = pow_series(inv_series(sub(1, zeval, p), δ, p), narb(k1), δ, p)
-    finalerror[l] = mullow(finalerror[l], f, δ, p)
-    z2eval = mullow(zeval, zeval, δ, p)
-    f = pow_series(inv_series(sub(1, z2eval, p), δ, p), narb(k2), δ, p)
-    finalerror[l] = mullow(finalerror[l], f, δ, p)
-
-    # g(z)
-    t = one(narb_poly)
-    f = narb_poly(coeff(g, 0))
-    for i in 1:s-1
-      t = mullow(t, zeval, δ, p)
-      add!(f, f, mul(t, coeff(g, i), p), p)
-    end
-    finalerror[l] = mullow(finalerror[l], f, δ, p)
-
-    # exp(maj(z))
-    f = exp_series(eval_series(maj, zeval, δ, p), δ, p)
-    finalerror[l] = mullow(finalerror[l], f, δ, p)
-
-    # sum_{j<finalτ} log(z)^j/j!
-    logzeval = log_series(zeval, δ, p)
-    f = one(narb_poly)
-    for j in finalτ-1:-1:1
-      div!(f, mullow(f, logzeval, δ, p), narb(j), p)
-      add!(f, f, 1, p)
-    end
-    finalerror[l] = mullow(finalerror[l], f, δ, p)
-  end
+  Er = tail_bound(Pθ, Px, u, λ, ns, αs, magnitude(z, p), δ, N, τ, ν, p)
 
   # evaluate the polynomials in log(z)
   #    sum_{i,j} c_{i,j} z^(λ-d+i) log^j(z)/j!
-  #
-  # Problems for z = 0: For c{i,j} == 0, the term should be ignored. Otherwise
-  #    z^a*log^j(z) = 0   if ...
-  #                 = 1   if ...
-  #                 = nan if ...
-  #
-  # However, the i sum has already been summed :(
-
   logz = normal ? log(z, p) : neg!(log(invz, p))
   zλ = normal ? pow(z, λ, p) : pow(invz, -λ, p)
   M = nacb_mat(δ, ν)
@@ -2144,18 +2422,13 @@ function eval_basis(
     else
       t = Σ[1+d][1+i][l]
       while (i -= 1) >= 0
-        # hack for 0*log(z) when z=0
-        if !iszero(t)
-          div!(t, t, i + 1, p)
-          mul!(t, t, logz, p)
-        end
+        div!(t, t, i + 1, p)
+        mul!(t, t, logz, p)
         add!(t, t, Σ[1+d][1+i][l], p)
       end
     end
     mul!(t, t, d == 0 ? zλ : mul(zλ, pow(z, -d, p), p), p)
-
-    er = mul(coeff(finalerror[l], d), factorial(d, p), p)
-#@show (radius(er), radius(t))
+    er = mul(coeff(Er[l], d), factorial(d, p), p)
     add_error!(t, er)
     setindex!(M, 1+d, l, t)
   end
@@ -2257,7 +2530,7 @@ function cscpi_series(x::fmpz, ord::Int, p::Int)
     pi!(t, p)
     pow!(t, t, UInt(2*n), p)
     mul!(t, t, divexact(bernoulli(2*n),factorial(ZZ(2*n)))*
-               (-1)^(n+1)*(4^n-2)*x^(2*n-1), p) # TODO
+               (-1)^(n+1)*(ZZ(4)^n-2)*x^(2*n-1), p) # TODO
     setcoeff!(z, 2*n, nacb(t))
   end
   return z
@@ -2287,6 +2560,8 @@ function hyp_initial_values_at_∞(
   λ::T, am::Vector{fmpz}, as::Vector{T},
   b::Vector{T},
   p::Int) where T
+
+  p += length(am) + length(as)
 
   m = length(am)
   r = [zero(nacb) for j in 1:m]
@@ -2375,17 +2650,17 @@ function hyp_initial_values_at_∞(
   return iv
 end
 
-function compute_f_at_0(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
+function compute_f_near_0(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   F = parent(a[1])
   Fx, x = PolynomialRing(F, "x")
   # 0 -> z
   Pθ, Px = hyp_equ(a, b, Fx(0)//Fx(1), x//Fx(1))
   αs = push!(F(1) .- b, F(0))
   e = eval_basis(Pθ, Px, F(0), [ZZ(0)], αs, z, 1, true, nacb(), p)
-  return e[1, 1]  
+  return e[1,1]  
 end
 
-function compute_f_at_∞(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
+function compute_f_near_∞(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   F = parent(a[1])
   Fx, x = PolynomialRing(F, "x")
   # ∞ -> z
@@ -2398,12 +2673,12 @@ function compute_f_at_∞(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
     arest = T[a[j] for j in 1:length(a) if !(j in indices)]
     iv = hyp_initial_values_at_∞(λ, ns, arest, b, p)
     e = eval_basis(Pθ, Px, λ, ns, αs, rz, 1, false, nz, p)
-    add!(s, s, mul(e, iv, p)[1, 1], p)
+    add!(s, s, mul(e, iv, p)[1,1], p)
   end
   return s
 end
 
-function compute_f_at_1(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
+function compute_f_near_1(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   p += 20
   n = length(a)
   F = parent(a[1])
@@ -2433,7 +2708,7 @@ function compute_f_at_1(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   e1 = eval_bases(Pθ, Px, ρ, αs, sub(1, z, p+60), 1, true, nacb(), p)
   e2 = eval_bases(Pθ, Px, ρ, αs, sub(1, w, p+60), n, true, nacb(), p)
   # 0 -> w -> 1 -> z
-  return mul(e1, solve(e2, e0, p), p)[1, 1]
+  return mul(e1, solve(e2, e0, p), p)[1,1]
 end
 
 function compute_f_anywhere(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
@@ -2461,11 +2736,11 @@ function compute_pfq(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   p += 20
   zz = convert(Complex{Float64}, z)
   if abs2(zz) < (7/8)^2
-    return compute_f_at_0(a, b, z, p)
+    return compute_f_near_0(a, b, z, p)
   elseif abs2(zz) > (8/7)^2
-    return compute_f_at_∞(a, b, z, p)
+    return compute_f_near_∞(a, b, z, p)
   elseif abs2(zz) < 2*real(zz) - 0.75
-    return compute_f_at_1(a, b, z, p)
+    return compute_f_near_1(a, b, z, p)
   else
     return compute_f_anywhere(a, b, z, p)  
   end
@@ -2619,6 +2894,15 @@ end
 println("************************** tests *****************************")
 
 @testset "singular points" begin
+  z = nacb(set!(narb(), "[0.0 +/- 1.0e-10]", 53))
+  f = compute_pfq(map(QQ,[1,2,3]), map(QQ,[4,5]), z, 53)
+  @test overlaps(f, one(nacb))
+  f = compute_pfq(map(QQ,[1,2,3]), map(QQ,[4,5]), nacb(QQ(0),53), 53)
+  @test overlaps(f, one(nacb))
+  
+  z = nacb(set!(narb(), "[1.0 +/- 1.0e-10]", 53))
+  f = compute_pfq(map(QQ,[1,2,3]), map(QQ,[4,5]), z, 53)
+  @test overlaps(f, 120-12*pi!(nacb(), 53)^2)
   f = compute_pfq(map(QQ,[1,2,3]), map(QQ,[4,5]), nacb(QQ(1),53), 53)
   @test overlaps(f, 120-12*pi!(nacb(), 53)^2)
 
@@ -2672,7 +2956,7 @@ end
     f2 = pfq([1//3,2//3],[1],1-m)
     f3 = pfq([5//6,6//6,7//6],[3//2,3//2],1-m)
     τ = (nacb(-1//3, p))^(1//2)*f2/f1
-    z = (-2 + 3*τ)/4 - (1-m)^(1//2)*f3/(6*ipi*f1)
+    z = (2 + 3*τ)/4 - (1-m)^(1//2)*f3/(6*ipi*f1)
     @test overlaps(-θ3(z,2*τ)*θ3(z,6*τ), exp(2*ipi*τ)*θ3(z+τ,2*τ)*θ3(z-3*τ,6*τ))
   end
 
