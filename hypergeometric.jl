@@ -6,6 +6,10 @@ import Nemo: zero!, one!, add!, sub!, mul!, div!, inv!, coeff,
 
 const ARF_PREC_EXACT = typemax(Int)
 
+function precision(R::AcbField)
+  return R.prec
+end
+
 #### five types: arb, acb, arb_poly, acb_poly, and acb_mat #####################
 
 mutable struct narb
@@ -130,6 +134,22 @@ function nacb(a::Int)
   ccall((:acb_set_si, libarb), Nothing,
         (Ref{nacb}, Int),
         z, a)
+  return z
+end
+
+function nacb(a::acb)
+  z = nacb()
+  ccall((:acb_set, libarb), Nothing,
+        (Ref{nacb}, Ref{acb}),
+        z, a)
+  return z
+end
+
+function (R::AcbField)(a::nacb)
+  z = R()
+  ccall((:acb_set_round, libarb), Nothing,
+        (Ref{acb}, Ref{nacb}, Int),
+        z, a, precision(R))
   return z
 end
 
@@ -2748,225 +2768,114 @@ end
 
 #### tests #####################################################################
 
-# TODO! use the acb type with its parent precision for testing
-function Base.:(+)(x::Int, y::nacb)
-  return add!(nacb(), y, x, precision_inc(y, 60))
-end
-
-function Base.:(+)(y::nacb, x::Int)
-  return add!(nacb(), y, x, precision_inc(y, 60))
-end
-
-function Base.:(-)(x::Int, y::nacb)
-  return sub!(nacb(), x, y, precision_inc(y, 60))
-end
-
-function Base.:-(a::T) where T <: Union{narb, nacb, narb_poly, acb_poly}
-  return neg!(T(), a)
-end
-
-function Base.:-(x::nacb, y::Int)
-  return sub!(nacb(), x, y, precision_inc(x, 60))
-end
-
-function Base.:*(a::Int, b::nacb)
-  return mul!(nacb(), b, a, precision(b))
-end
-
-function Base.:*(a::nacb, b::nacb)
-  return mul!(nacb(), a, b, precision_min(a, b))
-end
-
-function Base.:-(a::nacb, b::nacb)
-  return sub!(nacb(), a, b, precision_min(a, b))
-end
-
-function Base.:+(a::nacb, b::nacb)
-  return add!(nacb(), a, b, precision_min(a, b))
-end
-
-function Base.:/(a::nacb, b::nacb)
-  return div!(nacb(), a, b, precision_min(a, b))
-end
-
-function Base.:^(a::nacb, b::Union{Int, fmpq})
-  return pow!(nacb(), a, b, precision_inc(a, 60))
-end
-
-
-function Base.:*(a::narb, b::nacb)
-  return mul!(nacb(), b, a, precision_min(a,b))
-end
-
-function Base.:/(a::Int, b::nacb)
-  p = precision(b)
-  @assert p < ARF_PREC_EXACT-10
-  z = nacb()
-  inv!(z, b, p+10)
-  mul!(z, z, a, p+10)
-  return z
-end
-
-function Base.:/(a::nacb, b::Int)
-  p = precision(a)
-  @assert p < ARF_PREC_EXACT-10
-  return return div!(nacb(), a, b, p+10)
-end
-
-function nacb(a::Union{Int, Rational}, p::Int)
-  return nacb(QQ(a), p)
-end
-
-function pfq(a, b, z::nacb)
-  return compute_pfq(map(QQ, a), map(QQ, b), z, precision(z))
-end
-
-function Base.:^(a::nacb, b::Rational)
-  return a^QQ(b)
-end
-
-function Base.:*(a::nacb, b::Rational)
-  return mul(a, QQ(b), precision(a))
-end
-
-function Base.:*(b::Int, a::narb)
-  p = precision(a)
-  return mul!(narb(), a, b, p)
-end
-
-function Base.:*(b::Rational, a::nacb)
-  p = precision(a)
-  return mul(a, nacb(QQ(b), p), p)
-end
-
-function Base.:/(a::narb, b::narb)
-  p = precision_min(a, b)
-  return div!(narb(), a, b, p)
-end
-
-function Base.:-(a::Rational, b::nacb)
-  p = precision_inc(b, 60)
-  return sub!(nacb(), nacb(a, p), b, p)
-end
-
-function Base.:+(a::Rational, b::nacb)
-  p = precision_inc(b, 60)
-  @assert p < ARF_PREC_EXACT
-  return add!(nacb(), nacb(a, p), b, p)
-end
-
-function θ3(a::nacb, b::nacb)
-  z = [nacb(), nacb(), nacb(), nacb()]
-  p = precision_min(a, b)
+function θ3(a::acb, b::acb)
+  R = parent(a)
+  z = [R(), R(), R(), R()]
   ccall((:acb_modular_theta, libarb), Nothing,
-        (Ref{nacb}, Ref{nacb}, Ref{nacb}, Ref{nacb}, Ref{nacb}, Ref{nacb}, Int),
-        z[1], z[2], z[3], z[4], a, b, p)
+        (Ref{acb}, Ref{acb}, Ref{acb}, Ref{acb}, Ref{acb}, Ref{acb}, Int),
+        z[1], z[2], z[3], z[4], a, b, precision(R))
   return z[3]
 end
 
-function wp(a::nacb, b::nacb)
-  z = nacb()
-  p = precision_min(a, b)
-  ccall((:acb_elliptic_p, libarb), Nothing,
-        (Ref{nacb}, Ref{nacb}, Ref{nacb}, Int),
-        z, a, b, p)
-  return z
+function gamma(a::Rational, C::AcbField)
+  R = ArbField(precision(C))
+  return C(gamma(QQ(a), R))
 end
 
-function gamma(a::Rational, p::Int)
-  z = narb()
-  ccall((:arb_gamma_fmpq, libarb), Nothing,
-        (Ref{narb}, Ref{fmpq}, Int),
-        z, QQ(a), p)
-  return z
-end
+Base.rationalize(a::Int) = a
+Base.rationalize(a::Rational) = a
 
-function Base.exp(a::nacb)
-  z = nacb()
-  p = precision_inc(a, 60)
-  ccall((:acb_exp, libarb), Nothing,
-        (Ref{nacb}, Ref{nacb}, Int),
-        z, a, p)
-  return z
+function hypergeometric_pfq(a::Vector, b::Vector, z::acb)
+  C = parent(z)
+  A = map(QQ, a)
+  B = map(QQ, b)
+  return C(compute_pfq(A, B, nacb(z), precision(C)))
 end
 
 
 println("************************** tests *****************************")
 
 @testset "singular points" begin
-  z = nacb(set!(narb(), "[0.0 +/- 1.0e-10]", 53))
-  f = compute_pfq(map(QQ,[1,2,3]), map(QQ,[4,5]), z, 53)
-  @test overlaps(f, one(nacb))
-  f = compute_pfq(map(QQ,[1,2,3]), map(QQ,[4,5]), nacb(QQ(0),53), 53)
-  @test overlaps(f, one(nacb))
-  
-  z = nacb(set!(narb(), "[1.0 +/- 1.0e-10]", 53))
-  f = compute_pfq(map(QQ,[1,2,3]), map(QQ,[4,5]), z, 53)
-  @test overlaps(f, 120-12*pi!(nacb(), 53)^2)
-  f = compute_pfq(map(QQ,[1,2,3]), map(QQ,[4,5]), nacb(QQ(1),53), 53)
-  @test overlaps(f, 120-12*pi!(nacb(), 53)^2)
+  CC = AcbField(53)
 
-  f = compute_pfq(map(QQ,[5,4,3]), map(QQ, [2,1]), nacb(QQ(1),53), 53)
-  @test !isfinite(f)
+  z = CC("[0.0 +/- 1.0e-10]")
+  @test overlaps(hypergeometric_pfq([1,2,3],[4,5],z), one(CC))
+
+  z = zero(CC)
+  @test overlaps(hypergeometric_pfq([1,2,3],[4,5],z), one(CC))
+
+  z = CC("[1.0 +/- 1.0e-10]")
+  @test overlaps(hypergeometric_pfq([1,2,3],[4,5],z), 120-12*const_pi(CC)^2)
+
+  z = one(CC)
+  @test overlaps(hypergeometric_pfq([1,2,3],[4,5],z), 120-12*const_pi(CC)^2)
+
+  z = CC("[1.0 +/- 1.0e-10]")
+  @test !isfinite(hypergeometric_pfq([5,4,3],[2,1],z))
+
+  z = one(CC)
+  @test !isfinite(hypergeometric_pfq([5,4,3],[2,1],z))
 end
 
 @testset "algebraic cases" begin
-  for j in [nacb(1//7+2000, 100), nacb(1//7-2000, 100),
-            nacb(1//7+1728, 100), nacb(1//7-1728, 100),
-            nacb(1//7+200, 100), nacb(1//7-200, 100),
-            nacb(1//7+64, 100), nacb(1//7-64, 100),
-            nacb(1//7+2, 100), nacb(1//7-2, 100)]
-    f1 = pfq([-1//12,1//4],[2//3],1728/j)
-    f2 = pfq([1//4, 7//12],[4//3],1728/j)
+  CC = AcbField(100)
+
+  for j in [CC(1//7+2000), CC(1//7-2000),
+            CC(1//7+1728), CC(1728), CC(1//7-1728),
+            CC(1//7+200), CC(1//7-200),
+            CC(1//7+64), CC(-64), CC(1//7-64),
+            CC(1//7+2), CC(1//7-2)]
+    f1 = hypergeometric_pfq([-1//12,1//4],[2//3],1728/j)
+    f2 = hypergeometric_pfq([1//4, 7//12],[4//3],1728/j)
     t = j/3^3*f1^3/f2^3
     @test overlaps(j, 27*t*(t+8)^3/(t-1)^3)
 
-    f1 = pfq([-1//24,7//24],[3//4],1728/j)
-    f2 = pfq([5//24,13//24],[5//4],1728/j)
+    f1 = hypergeometric_pfq([-1//24,7//24],[3//4],1728/j)
+    f2 = hypergeometric_pfq([5//24,13//24],[5//4],1728/j)
     t = j/2^4*f1^4/f2^4
     @test overlaps(j, 16*(t^2+14*t+1)^3/(t*(t-1)^4))
 
-    f1 = pfq([-1//60,19//60],[4//5],1728/j)
-    f2 = pfq([11//60,31//60],[6//5],1728/j)
+    f1 = hypergeometric_pfq([-1//60,19//60],[4//5],1728/j)
+    f2 = hypergeometric_pfq([11//60,31//60],[6//5],1728/j)
     t = j*f1^5/f2^5
     @test overlaps(j, (t^4+228*t^3+494*t^2-228*t+1)^3/(t*(t^2-11*t-1)^5))
 
-    f1 = pfq([-1//42,13//42,9//14],[4//7,6//7],1728/j)
-    f2 = pfq([5//42,19//42,11//14],[5//7,8//7],1728/j)
-    f3 = pfq([17//42,31//42,15//14],[9//7,10//7],1728/j)
+    f1 = hypergeometric_pfq([-1//42,13//42,9//14],[4//7,6//7],1728/j)
+    f2 = hypergeometric_pfq([5//42,19//42,11//14],[5//7,8//7],1728/j)
+    f3 = hypergeometric_pfq([17//42,31//42,15//14],[9//7,10//7],1728/j)
     t = j*f1*f2^2/f3^3
     @test overlaps(j, (t^2-t+1)^3*(t^6+229*t^5+270*t^4-1695*t^3+1430*t^2-
                                       235*t+1)^3/((t^2-t)*(t^3-8*t^2+5*t+1)^7))
 
-    f1 = pfq([-1//10,1//10,1//2],[1//5,4//5],-64/j)
-    f2 = pfq([1//10,3//10,7//10],[2//5,6//5],-64/j)
-    f3 = pfq([7//10,9//10,13//10],[8//5,9//5],-64/j)
+    f1 = hypergeometric_pfq([-1//10,1//10,1//2],[1//5,4//5],-64/j)
+    f2 = hypergeometric_pfq([1//10,3//10,7//10],[2//5,6//5],-64/j)
+    f3 = hypergeometric_pfq([7//10,9//10,13//10],[8//5,9//5],-64/j)
     t = j*f2^2/f3*(j*f1^2 + f2*f3)/(j*f2^3 + f1*f3^2)
     @test overlaps(j, (t^2-1)*(t^2-4*t-1)^5/(t*(t^2+t-1)^5))
   end
 end
 
 @testset "function zeros" begin
-  p = 100
-  i = nacb(zero(narb), one(narb))
-  ipi = nacb(zero(narb), pi!(narb(), p))
+  CC = AcbField(100)
+  i = onei(CC)
+  ipi = const_pi(CC)*i
 
-  for m in [nacb(2//3, p)]
-    f1 = pfq([1//3,2//3],[1],m)
-    f2 = pfq([1//3,2//3],[1],1-m)
-    f3 = pfq([5//6,6//6,7//6],[3//2,3//2],1-m)
-    τ = (nacb(-1//3, p))^(1//2)*f2/f1
+  for m in [CC(2//3)]
+    f1 = hypergeometric_pfq([1//3,2//3],[1],m)
+    f2 = hypergeometric_pfq([1//3,2//3],[1],1-m)
+    f3 = hypergeometric_pfq([5//6,6//6,7//6],[3//2,3//2],1-m)
+    τ = (CC(-1//3))^(1//2)*f2/f1
     z = (2 + 3*τ)/4 - (1-m)^(1//2)*f3/(6*ipi*f1)
     @test overlaps(-θ3(z,2*τ)*θ3(z,6*τ), exp(2*ipi*τ)*θ3(z+τ,2*τ)*θ3(z-3*τ,6*τ))
   end
 
-  for j in [nacb(10000//3, p), nacb(10//3, p)]
-    f1 = pfq([1//12,5//12],[1],1728/j)
-    f2 = pfq([1//12,5//12],[1//2],1-1728/j)
-    f3 = pfq([1//3,2//3,1],[3//4,5//4],1-1728/j)
-    τ = i*(2*gamma(1//2,p)/gamma(7//12,p)/gamma(11//12,p)*f2/f1 - 1)
-    z = (1 + τ)/2 + (nacb(2//3,p))^(1//2)/ipi*(1-1728/j)^(1//4)*f3/f1
-    @test overlaps(zero(nacb), wp(z, τ))
+  for j in [CC(10000//3), CC(10//3)]
+    f1 = hypergeometric_pfq([1//12,5//12],[1],1728/j)
+    f2 = hypergeometric_pfq([1//12,5//12],[1//2],1-1728/j)
+    f3 = hypergeometric_pfq([1//3,2//3,1],[3//4,5//4],1-1728/j)
+    τ = i*(2*gamma(1//2,CC)/gamma(7//12,CC)/gamma(11//12,CC)*f2/f1 - 1)
+    z = (1 + τ)/2 + (CC(2//3))^(1//2)/ipi*(1-1728/j)^(1//4)*f3/f1
+    @test overlaps(zero(CC), ellipwp(z, τ))
   end
 end
 
@@ -3020,3 +2929,4 @@ end
 run_benchmarks()
 
 nothing
+
