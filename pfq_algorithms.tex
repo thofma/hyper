@@ -1,0 +1,247 @@
+\documentclass[10pt]{article}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{color}
+\addtolength{\textwidth}{1.5in}
+\addtolength{\hoffset}{-1.0in}
+\addtolength{\textheight}{2.0in}
+\addtolength{\voffset}{-1.25in}
+
+\newcommand{\F}[5] {{}_{#1}F_{#2} \left( \begin{array}{c} #3 \\ #4 \end{array} \Big| #5  \right)}
+
+\author{Daniel Schultz}
+\title{Calculating $\, _{p}F_{q}$}
+\date{}
+
+\begin{document}
+\maketitle
+
+For $\bold{a}=a_1,\dots,a_p$ and  $\bold{b}=b_1,\dots,b_q$
+\begin{equation}
+\label{Fdef}
+\F{p}{q}{\bold{a}}{\bold{b}}{z} := \sum_{n=0}^{\infty} \frac{(\bold{a})_n}{(\bold{b})_n} \frac{z^n}{n!}
+\end{equation}
+The function is undefined when any $b_i$ is $0,-1,-2,\dots$, i.e. $1/\Gamma(\bold{b}) = 0$. Also, $\hat{\bold{a}}_i$ denotes the length $p-1$ vector with the $i^{\text{th}}$ entry omitted.
+
+\section{The case $p < q+1$ [not implemented]}
+Just sum the series for any argument.
+
+\section{The case $p > q+1$ [not implemented]}
+The formal series is divergent except for zero argument or terminating parameters. For nonzero arguments it can defined via Borel summation, leading to
+\begin{equation*}
+\F{p}{q}{\bold{a}}{\bold{b}}{z} = \sum_{i=1}^{p} \frac{\Gamma(\bold{b}) \Gamma(\hat{\bold{a}}_i-a_i)}{\Gamma(\bold{b}-a_i) \Gamma(\hat{\bold{a}}_i)} (-z)^{-a_i} \F{q+1}{p-1}{a_i,1+a_i-\bold{b}}{1+a_i-\hat{\bold{a}}_i}{\frac{(-1)^{p-q-1}}{z}}
+\end{equation*}
+Integer differences among the $\bold{a}$ can be handled via limiting cases, and the series on the right are convergent. The only difficulty here is when $z$ is a ball containing $0$ \emph{but not identically $0$}. [Just take few terms of the divergent series and use an asymptotic formula for the error?]
+
+\section{The case $p=q+1$}
+
+\subsection{inside unit circle}
+For arguments sufficiently inside the unit circle, just sum the series.
+
+\subsection{outside unit circle}
+For $z \not \in [0,1]$ (?),
+\begin{equation*}
+\F{p}{p-1}{\bold{a}}{\bold{b}}{z} = \sum_{i=1}^{p} \frac{\Gamma(\bold{b}) \Gamma(\hat{\bold{a}}_i-a_i)}{\Gamma(\bold{b}-a_i) \Gamma(\hat{\bold{a}}_i)} (-z)^{-a_i} \F{p}{p-1}{a_i,1+a_i-\bold{b}}{1+a_i-\hat{\bold{a}}_i}{\frac{1}{z}}
+\end{equation*}
+and for arguments sufficiently outside the unit circle we can just sum the series on the right. As before, integer differences among the $\bold{a}$ can be handled via limiting cases.
+
+\subsection{near unit circle, away from one}
+Theoretically for any argument outside the branch cut $[1,\infty]$, the series on the right hand side of
+\begin{equation*}
+(1+z)^{-2 a_p} \F{p}{p-1}{\bold{a}}{\bold{b}}{\frac{4 z}{(1+z)^2}} = \sum_{n=0}^{\infty}u_n z^n, \quad |z| < 1
+\end{equation*}
+can be summed. However, since computation of the $u_n$'s is a bit expensive, it should only be used when absolutely neccessary. There is a good reason for the prefactor $(1+z)^{-2a_p}$: is present in many quadratic transformation formulas in special cases and has the effect of lowering the order of the recurrence relation for $u_n$ by one.
+
+It is also possible to use Pad\'e approximants here, but do we have useful error bounds?
+
+\subsection{near one}
+
+This is the most interesting case as the function can fail to be defined at one. The existence of $F(1)$ is governed by $\sigma = \Sigma(\bold{b}) - \Sigma(\bold{a})$. If $\sigma$ is not an integer we have
+\begin{equation}
+\label{nearone}
+F(1-z) = z^{\sigma} \sum_{n=0}^{\infty} u_n z^n + \sum_{n=0}^{\infty} v_n z^n
+\end{equation}
+with the $u_1,u_2,\dots$ determined from recurrences by $u_0 = \Gamma(-\sigma)\Gamma(\bold{b})/\Gamma(\bold{a})$ and the $v_{p-1}, v_p, \dots$ are determined from recurrences by $v_0, \dots, v_{p-2}$. Thus the difficulty is computing these $v_0, \dots, v_{p-2}$.
+
+If $\sigma$ is an integer, then at most one $\log(z)$ enters into the series.
+\subsubsection{near one: generic approach}
+We simply evaluate Equation \ref{nearone} and its derivatives up to and including order $p-1$ at $z=1/4$ to solve for the $u_0,v_0,\dots,v_{p-2}$. The explicit formula for $u_0$ is surprisingly useless in this approach.
+
+\subsubsection{near one: Buehring [not implemented - this section might even be wrong]}
+Here we sum the first $m$ terms of Equation \ref{Fdef} and use a formula derived by Buehring to sum the remaining terms. Since we will generically be dealing with logarithmically convergent series (when $z=1$) in both sums, it is important to balance the choice of $m$ between the two to ensure a sub-exponential algorithm.
+We have (Equations 2.7 and 2.9 in ``analytic continuation of the generalized hypergeoemtric sereis near unit argument with emphasis on the zero-balanced series'' by Buehring and Srivastava)
+\begin{align*}
+\sum_{n=m}^{\infty}{\frac{(\bold{a})_n}{(\bold{b})_n} \frac{z^n}{n!}}&=\frac{\Gamma(\bold{b})}{\Gamma(\bold{a})} z^m \sum_{k=0}^{\infty} {\frac{\Gamma(\bold{a}+m+k)}{\Gamma(\bold{b}+m+k)} \frac{z^k}{\Gamma(1+m+k)}}\\
+&=\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} z^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \, _2\tilde{F}_1\left( \begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| z\right)
+\end{align*}
+where the $A_k$ are independent of $m$ and are polynomials in $a_1,\dots,a_{p-1},b_1,\dots,b_{p-1}$. They can be defined in the base case $p=2$ as
+\begin{equation*}
+A_k\left(\begin{array}{c} a_1 \\ b_1 \end{array}\right) = \frac{(1-a_1)_k(b_1-a_1)_k}{k!}
+\end{equation*}
+and inductively for larger $p$ by Hadamard and Cauchy products. After all is said and done, the $A_k$ satisfy an order $p-1$ recurrence with asymptotic
+\begin{equation}
+\frac{A_k}{k!} \ll \sum_{i<p}k^{\sigma+a_p-1-a_i}
+\end{equation}
+Now set
+\begin{equation*}
+F_k = \, _2\tilde{F}_1\left( \begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| z\right)
+\end{equation*}
+We have
+\begin{equation*}
+F_k=\frac{\left(k+\sigma -1 - (1-z) \left(a_p+2 k+m+2 \sigma
+   -2\right)\right) F_{k-1} +(1-z) F_{k-2}}{z (k+\sigma )
+   \left(a_p+k+m+\sigma -1\right)}
+\end{equation*}
+and therefore the asymptotic
+\begin{equation*}
+k!F_k \ll k^{-\sigma} \left|1-1/z\right|^k + k^{-m-\sigma-a_p}
+\end{equation*}
+To ensure convergence of the tail series, we should have
+$|1-1/z|<1$ and $m+\operatorname{Re}(a_i)>0$ for all $i<p$.
+
+In reality the majorant method will probably produce a much worse bound $|A_k/k!| \le c k^{\mu}$ so we are balancing the sum of the first $m$ terms of a sum whose terms are like $n^{-1-\sigma}$ with another series that we can only prove has terms like $k^{\mu-m-\sigma-a_p}$. Any reasonable overestimation of $\mu$ can be compensated by a larger $m$. Finally, in order to sum in total no more than $O(d)$ terms for $d$ digit accuracy, it probably suffices to take $m \approx d$ for reasonable parameter ranges.
+
+\section{old stuff}
+\subsection{Tight ${}_2 F_1$ bounds everywhere}
+The analysis is for real parameters $a,b,c \in \mathbb{R}$, but it should be possible to do something for complex parameters too.
+
+With
+\begin{equation}
+f(w) = (1+w)^{-2 a} \, _2F_1\left(\begin{array}{c} a,b \\ c \end{array} \Big| \frac{4 w}{(1+w)^2}\right) = \sum_{n=0}^{\infty}r_n w^n, \quad |w| < 1
+\end{equation}
+we have $r_0=1$, $r_1=\frac{4ab}{c} - 2a$, and $r_{n+1} = \lambda_0(n) r_n + (1-\lambda_1(n)) r_{n-1}$, where
+\begin{align*}
+\lambda_0(n) &= \frac{2 (2 b-c) (n+a)}{(n+1) (n+c)}\\
+\lambda_1(n) &= \frac{2 (1-2 a+c) (n+a)}{(n+1) (n+c)}
+\end{align*}
+The unit disk $|w| < 1$ is mapped into the whole complex $z$-plane minus $[1,\infty)$ by $z=\frac{4w}{(1+w)^2}$, hence this provides a method for computing the usual branch of $\, _2F_1$ if we can bound the tails of the sum. Note that $\lambda_0, \lambda_1 \to 0$, and for the moment entertain the assumption that $|\lambda_0| \le \lambda_1 \le 1$ for all $n$:
+\begin{align*}
+|r_2| &= |\lambda_0 r_1 + (1 - \lambda_1) r_0| \\
+& \le |\lambda_0||r_1| + (1 - \lambda_1) |r_0| \\
+& \le  (|\lambda_0| + 1 - \lambda_1) \operatorname{max}(|r_0|, |r_1|) \\
+& \le \operatorname{max}(|r_0|, |r_1|)\text{.}
+\end{align*}
+Hence $|r_n| \le \operatorname{max}(|r_0|, |r_1|)$ for all $n$ by induction. For general real parameters $a, b, c$ the inequality $|\lambda_0(n)| \le \lambda_1(n)$ is not possible for all $n$ as singularities (either logarithmetic or algebraic) of the $\, _2F_1$ at $z=\infty$ and $z=1$ mean that the $r_n$ can grow like an arbitrarily large power of $n$.
+
+To remedy this, consider $\tilde{r}_n := r_n n^{-\mu}$ for some arbitrary real $\mu$. The transformed recurrence is $\tilde{r}_n = \tilde{\lambda}_0(n) \tilde{r}_{n-1} + (1 - \tilde{\lambda}_1(n)) \tilde{r}_{n-2}$ where
+\begin{align*}
+\tilde{\lambda}_0(n) &= \left(\frac{n}{n+1}\right)^{\mu} \lambda_0(n)\\
+\tilde{\lambda}_1(n) &= 1 - \left(\frac{n-1}{n+1}\right)^{\mu} (1-\lambda_1(n))
+\end{align*}
+If $|\tilde{\lambda}_0(n)| \le \tilde{\lambda}_1(n) \le 1$ for all $n \ge n_0$, then it follows as above that $r_n \le \max(|\tilde{r}_{n_0}|, |\tilde{r}_{n_0-1}|) n^{\mu}$ for all $n > n_0$. There are two ways to turn this into an algorithm for bounding the tails. Either choose an $n_0$ and compute a $\mu$ (not recommended), or since
+\begin{align*}
+\tilde{\lambda}_0(n) &= 2 (2 b-c) n^{-1}+O\left(n^{-2}\right)\\
+\tilde{\lambda}_1(n) &= 2 (1-2 a+c+\mu) n^{-1} + O\left(n^{-2}\right)
+\end{align*}
+we can choose any $\mu >-1 + 2 a - c + |2 b-c|$ and compute an $n_0$. This is an optimal bound on $\mu$.
+
+\subsection{Tight ${}_3 F_2$ bounds near $1$}
+
+Series expansions of solutions around $z=1$ can be constructed as
+\begin{equation*}
+\sum_{n=0}^{\infty} r_n (1-z)^{n+\lambda}
+\end{equation*}
+where $\lambda =0$ or $\lambda = b_1+b_2-a_1-a_2-a_3$ and $r_{n+2} + \kappa_1(n) r_{n+1} + \kappa_0(n) r_n = 0$ where
+\begin{align*}
+\kappa_0(n) &= \frac{\left(a_1+\lambda +n\right) \left(a_2+\lambda
+   +n\right) \left(a_3+\lambda +n\right)}{(\lambda +n+1)
+   (\lambda +n+2) \left(a_1+a_2+a_3-b_1-b_2+\lambda
+   +n+2\right)}\\
+&=1 + \left(b_1+b_2-5 \right) n^{-1} + O(n^{-2})\\
+\kappa_1(n) &=-2 - \left(b_1+b_2-5 \right) n^{-1} + O(n^{-2})
+\end{align*}
+For $\lambda = b_1+b_2-a_1-a_2-a_3$ the $r_n$ are determined once $r_0$ is fixed, while for $\lambda = 0$, the $r_n$ depend freely on $r_0$ and $r_1$. This gives $3$ solutions.
+
+By the substitution $r_n = \tilde{r}_n n^\mu$ where $\mu = -2 + \operatorname{max}(b_1,b_2)$, this equation can be brought to the form
+\begin{equation*}
+\tilde{r}_{n+2} + \left(-2 + \frac{d_1}{n} + \frac{d_2}{n^2} + O(\frac{1}{n^3}) \right) \tilde{r}_{n+1} + \left(1 - \frac{d_1}{n} - \frac{d_2}{n^2} + O(\frac{1}{n^3}) \right) \tilde{r}_{n} = 0
+\end{equation*}
+where crutially $d_1 = 1 + |b_1-b_2|$ is positive. This equation can be rewritten as
+\begin{equation*}
+\tilde{r}_{n+2} - \tilde{r}_{n+1} = \left(1 - \frac{d_1}{n} - \frac{d_2}{n^2} \right) (\tilde{r}_{n+1} - \tilde{r}_{n}) + O(\frac{\operatorname{max}(|\tilde{r}_{n+1}|, |\tilde{r}_{n}|)}{n^3})
+\end{equation*}
+All constants hidden by the O notation are effective and depend only on the parameters $b_i,a_i$. We would like to show that $\tilde{r}_{n} = O(n^{\epsilon})$ for every $\epsilon > 0$.
+
+
+\subsection{majorant method}
+
+This is a terse summary of Messarobba. We would like to study the various functions
+\begin{equation*}
+F\left(z\right)\text{,} \quad F\left(\frac{1}{z}\right)\text{,} \quad F\left(1-z\right)\text{,} \quad  (1+z)^{-2a_1} F\left(\frac{4z}{(1+z)^2}\right)\text{,} \quad \dots
+\end{equation*}
+as convergent power series for $|z|<1$ as this allows for the computation of $F$ everywhere. In order to evaluate these power series, we need bounds on the coefficients, and tight bounds are already difficult to prove for ${}_2 F_1$ and ${}_3 F_2$. If we are not near the radius of convergence of these series, an overestimation of the coefficients is acceptable if it allows us to actually get proven bounds.
+
+Each of these functions $f(z)$ satisfies a homogeneous linear differential equation $P(f(z))=0$ which will we write in terms of $\theta = z \frac{d}{dz}$. Since $z\theta = \theta z - z$, we can write the operator $P$ with $\theta$ \emph{on the left}. When $\theta$ is on the left and $z$ is on the right, it is easy to transform the differential equation to a recurrsion on the coefficients. For example, for $F(z) = \, _2F_1\left(\begin{array}{c} a_1,a_2 \\ b_1 \end{array} \Big| z\right) = \sum_{n=0}^{\infty}{u_n} z^n$, we have
+
+\begin{equation*}
+P = (\theta+b_1-1)(\theta) - (\theta+a_1-1)(\theta+a_2-1)z \Leftrightarrow \frac{u_n}{u_{n-1}} = \frac{(n+a_1-1)(n+a_2-1)}{(n+b_1-1)(n)}
+\end{equation*}
+
+\subsubsection{coefficient recursions}
+Write the differential operator as $P(z,\theta) = \theta^r p_r(z) + \dots + \theta p_1(z) + p_0(z) = P_s(\theta) z^s + \dots + P_1(\theta) z + P_0(\theta) \in\mathbb{F}[z,\theta]$ with $\theta$ on the left and assume that $P_0(0) \neq 0$. Define the operator $L(z,\theta) = P(z,\theta) p_r(z)^{-1} = \sum_{j=0}^{\infty} Q_j(\theta) z^j$ and note that $\deg(Q_0(\theta)) = r$ and $\deg(Q_j(\theta)) < r$ for $j > 0$. Let $\lambda \in \overline{\mathbb{F}}$ denote a fixed root of $Q_0$ such that none of $\lambda-1, \lambda-2, \dots$ is a root of $Q_0$. Let $\mu(\nu)$ denote the multiplicity of $\nu$ as a root of $Q_0$ (or as a root of $P_0$). For a double sequence $\{u_{\lambda + n, k}\}_{n,k \ge 0}$, let
+\begin{equation*}
+u(z) = \sum_{\substack{n=0 \\ \nu=\lambda+n}}^{\infty} \sum_{k=0}^{\infty} u_{\nu,k} z^{\nu} \frac{\log^k z}{k!}\text{,}
+\end{equation*}
+be a solution to $P(z,\theta)(u(z)) = 0$. This is actually a polynomial in $\log z$, so let $\tau(n)$ be a nondecreasing integer-valued function of $n$ satisfying 
+$u_{\lambda+n, k} = 0$ for $k \ge \tau(n)$. We will see shortly that we can take $\tau(0) \le \mu(\lambda + 0)$ and $\tau(n) \le \tau(n-1)+\mu(\lambda+n)$. In terms of the operator $S_k$, which shifts a sequence $\{a_k\}_{k \ge 0}$ to $\{a_{k+1}\}_{k \ge 0}$, the differential equation says that
+\begin{equation*}
+P_0(\nu + S_k) u_{\nu} = - \sum_{j=1}^{s} P_j(\nu + S_k) u_{\nu - j}
+\end{equation*}
+Since $P_0(\nu + S_k) = S_k^{\mu(\nu)}( c_0 + c_1 S_k + \cdots )$, this equation allows us to determine all $u_{\lambda+n, k}$ with $k \ge \mu(\lambda+n)$ once the initial values $E_{\lambda} = \{u_{\lambda+n, k} \, | \, 0 \le k < \mu(\lambda+n)\}$ are determined. Considering all possible $\lambda$ gives $r$ linearly independent solutions to $P=0$.
+
+\subsubsection{tail bounds}
+Let $K < \tau(\infty)$ denote the higest power of $\log z$ occuring in $u(z)$, and consider the truncation
+\begin{equation*}
+\tilde{u}(z) = \sum_{n=0}^{N-1} \sum_{k=0}^{K} u_{\lambda + n,k} z^{\lambda + n} \frac{\log^k z}{k!}\text{,}
+\end{equation*}
+and the normalized residual $q(z)$ defined by $P(z,\theta)(\tilde{u}(z)) = Q_0(\theta) q(z)$. This has the form
+\begin{equation*}
+q(z) = \sum_{j=0}^{s-1} \sum_{k = 0}^{K} q_{\lambda + N + j, k} z^{\lambda + N + j} \frac{\log^k z}{k!}
+\end{equation*}
+where the $q_{\lambda+N}, \dots, q_{\lambda+N+s-1}$ can be computed from $P(z,\theta)$ and $u_{\lambda+N-1}, \dots, u_{\lambda+N-s}$.
+
+Consider
+$y(z) = p_r(z)(\tilde{u}(z) - u(z))$ as a solution of $L(z, \theta)(y(z)) = Q_0(\theta)(q(z))$. Suppose that for some $n_0 > 0$ we have constructed power series $\hat{a}(z) = \sum_{j>0} \hat{a}_j z^j$, $\hat{q}(z)  = \sum_{n>0} \hat{q}_n z^n$, and $\hat{y}(z) = \sum_{n \ge 0} \hat{y}_n z^n$ with nonnegative coefficients satisfying
+\begin{enumerate}
+\item For all $j > 0$ and $n \ge n_0$,
+\begin{equation*}
+n \sum_{t=0}^{\tau(n) - 1} \left| [X^t] \frac{Q_j(\lambda+n+X)}{X^{-\mu(\lambda+n)}Q_0(\lambda+n+X)} \right| \le  \hat{a}_j \text{.}
+\end{equation*}
+\item For all $n \ge n_0$ and $k \ge 0$, $| q_{\lambda+n,k}| \le \hat{q}_n$.
+\item $|y_{\lambda+n,k}| \le \hat{y}_n$ for all $n < n_0$ and $k \ge 0$.
+\item $|y_{\lambda+n,k}| \le \hat{y}_n$ for all $n \ge n_0$ and $k < \mu(\lambda + n)$.
+\item $\hat{y}(z)$ satsifies
+\begin{equation*}
+z \hat{y}'(z) = \hat{a}(z) \hat{y}(z) + \hat{q}(z)\text{.}
+\end{equation*}
+\end{enumerate}
+If all of these are true, we have $|z^{-\lambda} y(z)| \le \hat{y}(z)$. The reason for dividing the differential equation by $p_r(z)$ on the right is that $\deg Q_j < \deg Q_0$, so we can expect finite values for the $\hat{a}_j$.
+
+Now, we have
+\begin{equation*}
+\sum_{j=1}^{\infty} Q_j(\theta) z^j = \frac{P(z,\theta)}{p_r(z)} - Q_0(\theta)
+= \frac{P(z,\theta)}{p_r(z)} - \frac{P(0,\theta)}{p_r(0)} \text{.}
+\end{equation*}
+For all differential equations arising from hypergeometric functions considered here, $\sum_{j=1}^{\infty} Q_j(\theta) z^j$ will be a finite linear combination of functions of the form ($i, k \ge 0$)
+\begin{equation*}
+z \frac{\partial}{\partial z} \frac{z^i}{(1-z)^k}, \quad
+z \frac{\partial}{\partial z} \log \left( \frac{1}{1-z} \right), \end{equation*}
+or
+\begin{equation*}
+z \frac{\partial}{\partial z} \frac{z^i}{(1-z^2)^k}, \quad
+z \frac{\partial}{\partial z} \frac{1}{2} \log \left( \frac{1}{1-z^2} \right), \quad
+z \frac{\partial}{\partial z} \frac{1}{2}\log \left( \frac{1+z}{1-z} \right),
+\end{equation*}
+all with nonnegative coefficients as power series in $z$. The coefficients of the linear combination, say $f_j(\theta)$, will be polynomials in $\theta$. Bounding the combinations
+\begin{equation*}
+n \sum_{t=0}^{\tau(n) - 1} \left| [X^t] \frac{f_j(\lambda+n+X)}{X^{-\mu(\lambda+n)} Q_0(\lambda+n+X)} \right|
+\end{equation*}
+for each $j$ and for all $n \ge n_0$ will give a valid $\hat{a}(z)$ and a nice formula for $\hat{h}(z) = \exp \int_0^z \hat{a}(z)/z dz$. It now suffices to choose a $\hat{q}(z)$ so that
+\begin{equation*}
+\hat{y}(z)=\hat{h}(z) \int_0^z \frac{\hat{q}(z)/z}{\hat{h}(z)}{dz}
+\end{equation*}
+satisfies conditions 2 and 4.
+
+
+\end{document}
+
+
