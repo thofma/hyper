@@ -1,2 +1,2 @@
 # hyper
-compute nFn-1
+compute pFq

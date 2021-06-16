@@ -1346,7 +1346,7 @@ The radius of convergence of the solutions about 0 are related to the zeros of
 Px[r]: we assume that Px_r does not have a zero at x = 0. In this case series
 solution to P(z,θ)u(z) = 0 can be written down as
 
-  u(z) = sum_{0≤i<∞, 0≤j≤K} u_{i,j} z^(λ+i)*log^j(z)/j!
+  u(z) = Σ_{0≤i<∞, 0≤j≤K} u_{i,j} z^(λ+i)*log^j(z)/j!
 
 for some K, and which u_{i,j} are free and which u_{i,j} determined by pervious
 terms in the solution is explained in Corollary 5.4: Only the u_{i,j} for
@@ -1356,7 +1356,7 @@ roots of Pθ[0] gives a total of deg(Pθ_0) linearly independent solutions.
 
 Now consider a truncation
 
-  u_N(z) = sum_{0≤i<N, 0≤j≤K} u_{i,j} z^(λ+i)*log^j(z)/j!
+  u_N(z) = Σ_{0≤i<N, 0≤j≤K} u_{i,j} z^(λ+i)*log^j(z)/j!
 
 and the normalized difference y(z) = Px_r(z)*(u_N(z) - u(z)).
 This y(z) satisfies L(z,θ)y(z) = Q_0(θ)q(z) where
@@ -1367,22 +1367,22 @@ This y(z) satisfies L(z,θ)y(z) = Q_0(θ)q(z) where
   4. Assuming none of λ+N, ..., λ+N+s-1 are roots of Q_0(θ), the normalized
      residue q(z) is of the form
 
-        q(z) = sum_{0≤i<s, 0≤j≤K} q_{i,j} z^(λ+N+i)*log^j(z)/j!
+        q(z) = Σ_{0≤i<s, 0≤j≤K} q_{i,j} z^(λ+N+i)*log^j(z)/j!
 
 Let ahat(z) be a series satisfying Proposition 5.5. Compute this by noting
 
-    sum_{1≤j} Q_j(θ)*x^j = P(x,θ)/Px_r(x) - Q_0(θ)
-                         = P(x,θ)/Px_r(x) - P(0,θ)/Px_r(0)
+    Σ_{1≤j} Q_j(θ)*x^j = P(x,θ)/Px_r(x) - Q_0(θ)
+                       = P(x,θ)/Px_r(x) - P(0,θ)/Px_r(0)
 
 If we can expand the rhs as a finite linear combination
 
-    sum_i f_i(θ)*(some power series in RR_+[[x]])
+    Σ_i f_i(θ)*(some power series in RR_+[[x]])
 
 then it suffices to bound each of the f_j(θ)/Q_0(θ) in accordance with the lhs
 of 5.9. Since we are ultimately interested in hhat(z) = exp(int_0^z ahat(z)/z dz),
 it makes since to expand
 
-    sum_{1≤j} Q_j(θ)*x^j = sum_i f_i(θ) x*d/dx(some power series in x*RR_+[[x]])
+    Σ_{1≤j} Q_j(θ)*x^j = Σ_i f_i(θ) x*d/dx(some power series in x*RR_+[[x]])
 
 For all the differential equations considered here, since we have few
 singularities, the "some power series in x*RR_+[x]" can be taken to be
@@ -1406,7 +1406,7 @@ Given (*) how to compute bounds on |u_N(z) - u(z)| and the derivatives
 
 The code currently computes the power series to order O(ε^δ) of
 
-  phat(|z|+ε)*(|z|+ε)^(λ+N)*ghat(|z|+ε)*hhat(|z|+ε)*(sum_{j<?} log^j(|z|+ε)/j!
+  phat(|z|+ε)*(|z|+ε)^(λ+N)*ghat(|z|+ε)*hhat(|z|+ε)*(Σ_{j<?} log^j(|z|+ε)/j!
 
 and does an add_error! on the coefficients of ε^d/d!, but this looks suspicious.
 =#
@@ -1464,7 +1464,7 @@ Since Q_0(θ) = θ*(θ+c-1), For large N, our hhat(z) is going to be about
 and phat(z) is 1/(1-z^2).
 
 
-From P(x, θ), the coefficients of u(z) = sum_n u_n*z^n satisfy
+From P(x, θ), the coefficients of u(z) = Σ_n u_n*z^n satisfy
 
   (n+1)*(n+c)*u_{n+1} = 2*(2*b-c)*(n+a)*u_n + (n+2*a-1)*(n+2*a-c)*u_{n-1}.
 
@@ -1488,7 +1488,7 @@ mutable struct hyp_majorant{S}
   log_coeff::S              # log(1/(1-z))
   log2_coeff0::S            # log(1/(1-z^2))
   log2_coeff1::S            # log((1+z)/(1-z))
-  poly_coeffs::Vector{S}    # [z^i]         # not used ?
+  poly_coeffs::Vector{S}    # [z^i]
   recp_coeffs::Vector{S}    # [z/(1-z)^i]
   recp2_coeffs1::Vector{S}  # [z^1/(1-z^2)^i]
   recp2_coeffs2::Vector{S}  # [z^2/(1-z^2)^i]
@@ -1552,7 +1552,7 @@ function series(a::hyp_majorant{narb}, ord::Int, p::Int)
 #  log2_coeff1::S            # log((1+z)/(1-z))
     add!(c, c, mul(iseven(j) ? a.log2_coeff0 : a.log2_coeff1, fmpq(2//j), p), p)
 
-#  poly_coeffs::Vector{S}    # [z^i]         # not used ?
+#  poly_coeffs::Vector{S}    # [z^i]
     for i in 1:length(a.poly_coeffs)
       add!(c, c, a.poly_coeffs[i], p)
     end
@@ -1588,19 +1588,19 @@ function eval_series(a::hyp_majorant{narb}, z::narb_poly, ord::Int, p::Int)
   l2 = log1p_series(z, ord, p)
 
 #  log_coeff::S              # log(1/(1-z))
-  s = mul(l1, a.log_coeff, p)
+  s = iszero(a.log_coeff) ? zero(narb_poly) : mul(l1, a.log_coeff, p)
 
 #  log2_coeff0::S            # log(1/(1-z^2))   = l1 - l2
 #  log2_coeff1::S            # log((1+z)/(1-z)) = l1 + l2
-  add!(s, s, mul(l1, add(a.log2_coeff1, a.log2_coeff0, p), p), p)
-  add!(s, s, mul(l2, sub(a.log2_coeff1, a.log2_coeff0, p), p), p)
+  iszero(a.log2_coeff1) || add!(s, s, mul(l1, add(a.log2_coeff1, a.log2_coeff0, p), p), p)
+  iszero(a.log2_coeff0) || add!(s, s, mul(l2, sub(a.log2_coeff1, a.log2_coeff0, p), p), p)
 
-#  poly_coeffs::Vector{S}    # [z^i]         # not used ?
+#  poly_coeffs::Vector{S}    # [z^i]
   v = z
   t = one(narb_poly)
   for i in 1:length(a.poly_coeffs)
     t = mullow(t, v, ord, p)
-    add!(s, s, mul(t, a.poly_coeffs[i], p), p)
+    iszero(a.poly_coeffs[i]) || add!(s, s, mul(t, a.poly_coeffs[i], p), p)
   end
 
 #  recp_coeffs::Vector{S}    # [z/(1-z)^i]
@@ -1608,7 +1608,7 @@ function eval_series(a::hyp_majorant{narb}, z::narb_poly, ord::Int, p::Int)
   t = z
   for i in 1:length(a.recp_coeffs)
     t = mullow(t, v, ord, p)
-    add!(s, s, mul(t, a.recp_coeffs[i], p), p)
+    iszero(a.recp_coeffs[i]) || add!(s, s, mul(t, a.recp_coeffs[i], p), p)
   end
 
 #  recp2_coeffs1::Vector{S}  # [z^1/(1-z^2)^i]
@@ -1616,14 +1616,14 @@ function eval_series(a::hyp_majorant{narb}, z::narb_poly, ord::Int, p::Int)
   t = z
   for i in 1:length(a.recp2_coeffs1)
     t = mullow(t, v, ord, p)
-    add!(s, s, mul(t, a.recp2_coeffs1[i], p), p)
+    iszero(a.recp2_coeffs1[i]) || add!(s, s, mul(t, a.recp2_coeffs1[i], p), p)
   end
 
 #  recp2_coeffs2::Vector{S}  # [z^2/(1-z^2)^i]
   t = mullow(z, z, ord, p)
   for i in 1:length(a.recp2_coeffs1)
     t = mullow(t, v, ord, p)
-    add!(s, s, mul(t, a.recp2_coeffs1[i], p), p)
+    iszero(a.recp2_coeffs1[i]) || add!(s, s, mul(t, a.recp2_coeffs1[i], p), p)
   end
 
   return s
@@ -1700,7 +1700,7 @@ function partial_fractions(f, k1::Int, k2::Int)
 end
 
 # Algorithm 7.1
-# bound sum_{j<τ} |n*[θ^j]f(n+θ)/g(n+θ)| for n0≤n≤n1
+# bound Σ_{j<τ} |n*[θ^j]f(n+θ)/g(n+θ)| for n0≤n≤n1
 # it is good if g does not vanish at any integer in [n0, n1]
 # pass n1 < 0 for n1 = ∞ :(
 # should have g(θ) = prod_α (θ-α)
@@ -1731,25 +1731,25 @@ function fraction_bound_normal(
 
   # x = interval containing [1/n1, 1/n0]
   x = nacb(mul(pm_one, 1//n0, p))
+#=
+  let a[b] denote coeff(a, b). Since the case of f[d-1] ≠ 0 is important,
 
-  # let a[b] denote coeff(a, b)
-  # Since the case of f[d-1] != 0 is important, break up
-  #
-  # n*f(n+ε)/g(n+ε)
-  #
-  # = (n+ε)*f(n+ε)/g(n+ε) - ε*f(n+ε)/g(n+ε)
-  #
-  #            (n+ε)*f(n+ε) - f[d-1]*g(n+ε) - ε*f(n+ε)
-  # = f[d-1] + ---------------------------------------
-  #                             g(n+ε)
-  #     
-  #            sum_{0≤i<d} (f[i-1] - f[d-i]*g[i] - ε*f[i])*(n+ε)^i
-  # = f[d-1] + ---------------------------------------------------
-  #                            prod_α (n+ε-α)
-  # with x = 1/n
-  #              sum_{0≤i<d} (f[i-1] - f[d-i]*g[i] - ε*f[i])*x^(d-1-i)*(1+x*ε)^i
-  # = f[d-1] + x*---------------------------------------------------------------
-  #                                     prod_α (1-x*α+x*ε)
+  n*f(n+ε)/g(n+ε)
+
+  = (n+ε)*f(n+ε)/g(n+ε) - ε*f(n+ε)/g(n+ε)
+
+             (n+ε)*f(n+ε) - f[d-1]*g(n+ε) - ε*f(n+ε)
+  = f[d-1] + ---------------------------------------
+                              g(n+ε)
+
+             Σ_{0≤i<d} (f[i-1] - f[d-i]*g[i] - ε*f[i])*(n+ε)^i
+  = f[d-1] + ---------------------------------------------------
+                             prod_α (n+ε-α)
+  with x = 1/n
+               Σ_{0≤i<d} (f[i-1] - f[d-i]*g[i] - ε*f[i])*x^(d-1-i)*(1+x*ε)^i
+  = f[d-1] + x*---------------------------------------------------------------
+                                      prod_α (1-x*α+x*ε)
+=#
   num = zero(nacb_poly)
   t = one(nacb)
   t2 = nacb_poly(one(nacb), x)
@@ -1801,7 +1801,7 @@ function fraction_bound_normal(
   return res
 end
 
-# bound sum_{j<τ} |n*[θ^j]f(n+θ)/(θ^-μ*g(n+θ))|
+# bound Σ_{j<τ} |n*[θ^j]f(n+θ)/(θ^-μ*g(n+θ))|
 function fraction_bound_special(f, g, μ::Int, τ::Int, n::fmpz, p::Int)
   Fθ = parent(f)
   @assert Fθ == parent(g)
@@ -1950,21 +1950,19 @@ end
 # return upperbound on |a|
 function magnitude(a::nacb, p)
   mag = narb()
-  GC.@preserve a begin
-    t = mag_struct(0, 0)
-    ccall((:mag_init, libarb), Nothing,
-          (Ref{mag_struct},),
-          t)
-    ccall((:acb_get_mag, libarb), Nothing,
-          (Ref{mag_struct}, Ref{nacb}),
-          t, a)
-    ccall((:arb_set_interval_mag, libarb), Nothing,
-          (Ref{narb}, Ref{mag_struct}, Ref{mag_struct}, Int),
-          mag, t, t, p)
-    ccall((:mag_clear, libarb), Nothing,
-          (Ref{mag_struct},),
-          t)
-  end
+  t = mag_struct(0, 0)
+  ccall((:mag_init, libarb), Nothing,
+        (Ref{mag_struct},),
+        t)
+  ccall((:acb_get_mag, libarb), Nothing,
+        (Ref{mag_struct}, Ref{nacb}),
+        t, a)
+  ccall((:arb_set_interval_mag, libarb), Nothing,
+        (Ref{narb}, Ref{mag_struct}, Ref{mag_struct}, Int),
+        mag, t, t, p)
+  ccall((:mag_clear, libarb), Nothing,
+        (Ref{mag_struct},),
+        t)
   return mag
 end
 
@@ -2030,16 +2028,16 @@ function tail_bound(Pθ, Px, u, λ, ns, αs, zmag, δ, N, τ, ν, p)
       setcoeff!(g, i, max(zero(narb), div(coeff(g, i), N+i, p), p))
     end
 
-    # f(z) is given by sum_{i,j} u_{i,j}*z^(λ+i)*log(z)^j/j!
+    # f(z) is given by Σ_{i,j} u_{i,j}*z^(λ+i)*log(z)^j/j!
     # The sum on j is finite and we have evaluated the sum f_N(z) on i<N.
-    # For each j, the remainder sum_{i>=N} u_{i,j}*z^(λ+i) is majorized by
+    # For each j, the remainder Σ_{i>=N} u_{i,j}*z^(λ+i) is majorized by
     #     R(z) = z^(λ+N)*g(z)*exp(maj(z))*c/((1-z)^k1*(1-z^2)^k2)
     #         TODO!!  when there are large initial roots so that ns is still
     #                 not empty increase g(z) accordingly. for now we just
     @assert isempty(ns)
 
     # The m^th derivative error |f^m(z) - f_N^m(z)| can be bounded by the
-    # ε coefficients of R(|z|+ε)*sum_{j<?}log(|z|+ε)^j/j!   ??????
+    # ε coefficients of R(|z|+ε)*Σ_{j<?}log(|z|+ε)^j/j!   ??????
 
     # z^(λ+N)
     zeval = narb_poly(zmag, 1)
@@ -2066,7 +2064,7 @@ function tail_bound(Pθ, Px, u, λ, ns, αs, zmag, δ, N, τ, ν, p)
     f = exp_series(eval_series(maj, zeval, δ, p), δ, p)
     Er[l] = mullow(Er[l], f, δ, p)
 
-    # sum_{j<finalτ} log(z)^j/j!
+    # Σ_{j<finalτ} log(z)^j/j!
     logzeval = log_series(zeval, δ, p)
     f = one(narb_poly)
     for j in finalτ-1:-1:1
@@ -2280,8 +2278,8 @@ end
 
 # Return δ by ν matrix M such that for any vector iv of ν initial values the
 # solution f(z) determined by these initial values and its derivatives is M.iv.
-#  f(z) = sum_{i,j} z^(λ-0+i)*log(z)^j/j!*( u[i,j] )
-# f'(z) = sum_{i,j} z^(λ-1+i)*log(z)^j/j!*( (λ+i)*u[i,j] + u[i,j+1] )
+#  f(z) = Σ_{i,j} z^(λ-0+i)*log(z)^j/j!*( u[i,j] )
+# f'(z) = Σ_{i,j} z^(λ-1+i)*log(z)^j/j!*( (λ+i)*u[i,j] + u[i,j+1] )
 function eval_basis(
   Pθ::Vector,
   Px::Vector,
@@ -2431,7 +2429,7 @@ function eval_basis(
   Er = tail_bound(Pθ, Px, u, λ, ns, αs, magnitude(z, p), δ, N, τ, ν, p)
 
   # evaluate the polynomials in log(z)
-  #    sum_{i,j} c_{i,j} z^(λ-d+i) log^j(z)/j!
+  #    Σ_{i,j} c_{i,j} z^(λ-d+i) log^j(z)/j!
   logz = normal ? log(z, p) : neg!(log(invz, p))
   zλ = normal ? pow(z, λ, p) : pow(invz, -λ, p)
   M = nacb_mat(δ, ν)
@@ -2572,10 +2570,100 @@ function rgamma(a::nacb, p::Int)
   return z
 end
 
+# integers am[1] ≤ am[2] ≤ ... ≤ am[m]
 # the numerator parameters are λ + am[1], ..., λ + am[m], as[1], ... , as[.]
 # produce the initial values for the exponents λ + am[1], ..., λ + am[m]
 # computed by replacing λ + am[1+i] -> λ + am[1+i] + i*ε and letting ε -> 0
 # no difference λ - as[i] is an integer
+#=
+  keep in mind:
+    g(a,ε,t) := Γ(a+ε)/(1-(a+ε))_t
+              = (-1)^t*Γ(a-t+ε)               for integer t, nice for a > t
+              = (-1)^a*π*csc(π*ε)/Γ(1-a+t-ε)  for integer a, nice for a ≤ t
+
+  hat(a)[k] is the a-vector with the k^th entry omitted
+
+  derivation:  of concern in the formula
+
+      a            Γ(b)*Γ(hat(a)[k] - a[k])  a[k]   a[k], 1+a[k]-b       p-q
+  pFq( ;-1/z) =  Σ ------------------------ z    F(                ; (-1)   *z)
+      b         k≤p Γ(b-a[k])*Γ(hat(a)[k])         1+a[k]-hat(a)[k]
+
+  is the coefficient of z^(λ + n)*ε^0 as a polynomial in log(z). We don't care
+  about negative powers of ε because the total contribution of them is zero,
+  and we don't care about positive powers of ε because ε -> 0.
+
+  recall that the a vector is partition into
+    {λ + am[1+i]}_{0≤i<m}, and the rest as[1], ... , as[p-m]
+
+  the coefficient of z^(λ + n) is that of z^(λ + n) in
+
+        Γ(b) * (Π_{i<m,i≠k} Γ(a[1+i]-a[1+k])) * Γ(as-a[1+k])
+    Σ   --------------------------------------------------------
+  0≤k<m     Γ(b-a[1+k]) * (Π_{i<m,i≠k} Γ(a[1+i])) * Γ(as)
+
+      * exp(a[1+k]*log(z))
+
+                       (a[1+k])_t * (1+a[1+k]-b)_t                  (-1)^(t*(p-q))*z^t
+      * Σ  ------------------------------------------------------- -------------
+       0≤t (Π_{i<m,i≠k} (1+a[1+k]-a[1+i])_t) * (1+a[1+k]-as)_t       t!
+
+  using a[1+i] = λ+am[1+i]+i*ε for i<m
+
+    Γ(b)             Π_{i<m,i≠k} Γ(am[1+i]-am[1+k]+(i-k)*ε)
+  = ---- *   Σ    Σ  ----------------------------------------------
+    Γ(as)  0≤k<m 0≤t Π_{i<m,i≠k} (1+am[1+k]-am[1+i]+(k-i)*ε)_t
+
+                (λ+am[1+k]+k*ε)_t              * (1+λ+am[1+k]+k*ε-b)_t
+          * ------------------------------------------------------------------
+            (Π_{i<m,i≠k} Γ(λ+am[1+i]+i*ε)) * Γ(b-λ-am[1+k]-k*ε)
+
+            Γ(as-λ-am[1+k]-k*ε)                    (-1)^(t*(p-q))*z^(t+λ+am[1+k])
+          * --------------------- exp(k*ε*log(z)) -------------------------------
+            (1+λ+am[1+k]+k*ε-as)_t                            t!
+
+
+    Γ(b)                (λ+am[1+k]+k*ε)_t
+  = ---- *   Σ    Σ  ------------------------
+    Γ(as)  0≤k<m 0≤t Π_{i<m,i≠k} Γ(λ+am[1+i]+i*ε)
+
+                  * Π_{i<m,i≠k} g(am[1+i]-am[1+k], (i-k)*ε, t)
+
+                    g(as-λ-am[1+k], -k*ε, t)
+                  * ------------------------
+                    g(b-λ-am[1+k], -k*ε, t)
+
+                                    (-1)^(t*(p-q))*z^(t+λ+am[1+k])
+                  * exp(k*ε*log(z)) ------------------------------
+                                                t!
+
+
+    Γ(b)                (λ+am[1+k]+k*ε)_t
+  = ---- *   Σ    Σ  ------------------------
+    Γ(as)  0≤k<m 0≤t Π_{i<m,i≠k} Γ(λ+am[1+i]+i*ε)
+
+                  * (-1)^(t*(m-1)) * Π_{i<m,i≠k} g(am[1+i]-am[1+k], (i-k)*ε, t)/(-1)^t
+
+                    (-1)^(t*(p-m)) * Γ(as-λ-am[1+k]-t-k*ε)
+                  * -------------------------------------
+                    (-1)^(t*q) * Γ(b-λ-am[1+k]-t-k*ε)
+
+                                    (-1)^(t*(p-q))*z^(t+λ+am[1+k])
+                  * exp(k*ε*log(z)) ------------------------------
+                                                t!
+
+    Γ(b)                                    g(am[1+i]-am[1+k], (i-k)*ε, t)/(-1)^t
+  = ---- *   Σ    Σ (λ+am[1+k]+k*ε)_t    Π  -------------------------------------
+    Γ(as)  0≤k<m 0≤t                  i<m,i≠k           Γ(λ+am[1+i]+i*ε)
+
+                    Γ(as-λ-am[1+k]-t-k*ε)
+                  * ---------------------
+                    Γ(b-λ-am[1+k]-t-k*ε)
+
+                       (k*ε)^i*log(z)^i z^(λ+t+am[1+k])
+                  * Σ  ---------------- ---------------
+                   0≤i         i!             t!
+=#
 function hyp_initial_values_at_∞(
   λ::T, am::Vector{fmpz}, as::Vector{T},
   b::Vector{T},
@@ -2596,7 +2684,7 @@ function hyp_initial_values_at_∞(
     # compute coeffs r[1+j], ..., r[1+j+μ-1]
     # of z^(λ+n), ..., z^(λ+n)*log^(μ-1)(z)/(μ-1)!
     for k in 0:m-1
-      # t is the index of the term in the pFq series
+      # t is the index of the term in the (q+1)F(p-1) series
       t = n - am[1+k]
       if t < 0
         continue
@@ -2751,18 +2839,24 @@ end
 #   - only the greatest integer exponent n has nonzero value and this value is
 #      prod_i (ai)_n / prod_i Γ(bi + n) * z^n / n!  (with no log(z))
 function compute_pfq(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
-  @assert length(a) == length(b) + 1
   Nemo.arb_check_precision(p+200)
   p += 20
   zz = convert(Complex{Float64}, z)
-  if abs2(zz) < (7/8)^2
+  if length(a) < length(b) + 1
     return compute_f_near_0(a, b, z, p)
-  elseif abs2(zz) > (8/7)^2
+  elseif length(a) > length(b) + 1
+    contains_zero(z) && error("oops not implemented")
     return compute_f_near_∞(a, b, z, p)
-  elseif abs2(zz) < 2*real(zz) - 0.75
-    return compute_f_near_1(a, b, z, p)
   else
-    return compute_f_anywhere(a, b, z, p)  
+    if abs2(zz) < (7/8)^2
+      return compute_f_near_0(a, b, z, p)
+    elseif abs2(zz) > (8/7)^2
+      return compute_f_near_∞(a, b, z, p)
+    elseif abs2(zz) < 2*real(zz) - 0.75
+      return compute_f_near_1(a, b, z, p)
+    else
+      return compute_f_anywhere(a, b, z, p)
+    end
   end
 end
 
@@ -2782,13 +2876,10 @@ function gamma(a::Rational, C::AcbField)
   return C(gamma(QQ(a), R))
 end
 
-Base.rationalize(a::Int) = a
-Base.rationalize(a::Rational) = a
-
 function hypergeometric_pfq(a::Vector, b::Vector, z::acb)
   C = parent(z)
-  A = map(QQ, a)
-  B = map(QQ, b)
+  A = fmpq[QQ(i) for i in a]
+  B = fmpq[QQ(i) for i in b]
   return C(compute_pfq(A, B, nacb(z), precision(C)))
 end
 
@@ -2877,6 +2968,22 @@ end
     z = (1 + τ)/2 + (CC(2//3))^(1//2)/ipi*(1-1728/j)^(1//4)*f3/f1
     @test overlaps(zero(CC), ellipwp(z, τ))
   end
+end
+
+@testset "entire case" begin
+  CC = AcbField(100)
+
+  for z in [CC(1), CC(-1), CC(10), CC(-10)]
+    @test overlaps(hypergeometric_pfq([1],[2],z), (exp(z)-1)/z)
+  end
+end
+
+@testset "divergent case" begin
+  CC = AcbField(100)
+
+  # check that 0! - 1! + 2! - 3! + ... is supposed to be around 0.59
+  @test overlaps(hypergeometric_pfq([1,1],[],CC(-1)),
+                 CC("[0.59634736232319407434107849937 +/- 2.01e-30]"))
 end
 
 
