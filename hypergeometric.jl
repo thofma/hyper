@@ -3415,7 +3415,7 @@ end
 
 run_benchmarks()
 
-# check special heuristic computation at 1
+# check special currently-heuristic computation at 1
 for digits in [50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600]
 m = trunc(Int, digits*4.0)
 N = trunc(Int, digits*1.0)

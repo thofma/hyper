@@ -15,28 +15,31 @@
 \begin{document}
 \maketitle
 
-For $\bold{a}=a_1,\dots,a_p$ and  $\bold{b}=b_1,\dots,b_q$
+For $\bold{a}=a_1,\dots,a_p$ and  $\bold{b}=b_1,\dots,b_q$, set $(a)_n := \Gamma(a+n)/\Gamma(a)$ and $(\bold{a})_n := \prod_i (a_i)_n$ and define
 \begin{equation}
 \label{Fdef}
 \F{p}{q}{\bold{a}}{\bold{b}}{z} := \sum_{n=0}^{\infty} \frac{(\bold{a})_n}{(\bold{b})_n} \frac{z^n}{n!}
 \end{equation}
-The function is undefined when any $b_i$ is $0,-1,-2,\dots$, i.e. $\Gamma(\bold{b})$ is infinite. Also, $\hat{\bold{a}}_i$ denotes the length $p-1$ vector with the $i^{\text{th}}$ entry omitted. The standard quantity
+The function is undefined when any $b_i$ is $0,-1,-2,\dots$, i.e. $\Gamma(\bold{b}) := \prod_i \Gamma(b_i)$ is infinite. Also, $\hat{\bold{a}}_i$ denotes the length $p-1$ vector with the $i^{\text{th}}$ entry omitted. The standard quantity
 $\sigma = \Sigma(\bold{b}) - \Sigma(\bold{a})$ governs several properties of these functions. Whenever a possibly infinite quantity $\Gamma(a_i-a_j)$ appears in a formula, that formula should be interpret via a limiting cases of the general formula.
 
 \section{The case $p < q+1$ [not implemented]}
-Just sum the series for any argument. The problem for large $|z|$ is that it make take many terms before the partial sums start to approach the true value.
-In this case, the formal expansion ($n = q+1-p$)
+Just sum the series for any argument. The problem for large $|z|$ is that many terms may be required before the partial sums start to approach the true value. Indeed in the special case of ${}_{1}F_{1}(a_1;b_1|z)$ the ratio of successive terms is
+\begin{equation*}
+\frac{a+n}{b+n} \cdot \frac{z}{n} \approx \frac{z}{n}
+\end{equation*}
+and at approximately $|z|$ terms have to be summed before the terms start to decrease. In this case, the formal expansion ($n = q+1-p$)
 \begin{align*}
 \F{p}{q}{\bold{a}}{\bold{b}}{z}&=\sum_{i=1}^{p} \frac{\Gamma(\bold{b}) \Gamma(\hat{\bold{a}}_i-a_i)}{\Gamma(\bold{b}-a_i) \Gamma(\hat{\bold{a}}_i)} (-z)^{-a_i} \F{q+1}{p-1}{a_i,1+a_i-\bold{b}}{1+a_i-\hat{\bold{a}}_i}{\frac{(-1)^n}{z}}\\
 &+\sum_{\alpha^n=1} \frac{\Gamma(\bold{b})}{n (2 \pi )^{\frac{n-1}{2}} \Gamma(\bold{a})} e^{n \alpha z^{1/n}} z^{\frac{n-1}{2 n}-\frac{\sigma
-   }{n}}\left(1 + \text{ series in } \frac{1}{\alpha z^{1/n}} \right)
+   }{n}}\left(1 + \text{ series in } \frac{1}{\alpha z^{1/n}} \right)\text{,}
 \end{align*}
-consists of $q+1$ formal series. The first $p$ series are hypergeometric and $1/n$--Borel summable. The last $n$ series are $?$--Borel summable. TODO: check this.
+which consists of $q+1$ formal series, is useful. The first $p$ series are hypergeometric and $1/n$--Borel summable. The last $n$ series are $?$--Borel summable and the coefficients satisfy recurrences of order ?. TODO: check this.
 
 
 
 \section{The case $p > q+1$ [not implemented]}
-The formal series is divergent except for zero argument or terminating parameters and is $1/(p-q-1)$--Borel summable in a range of directions. For nonzero arguments this leads to
+The formal series is divergent except for zero argument or terminating parameters and is $1/(p-q-1)$--Borel summable in a range of directions. For nonzero arguments this leads to ("The Borel Sum of Divergent Barnes Hypergeometric Series and its Application to a Partial Differential Equation" by Kunio Ichinobe)
 \begin{equation*}
 \F{p}{q}{\bold{a}}{\bold{b}}{z} = \sum_{i=1}^{p} \frac{\Gamma(\bold{b}) \Gamma(\hat{\bold{a}}_i-a_i)}{\Gamma(\bold{b}-a_i) \Gamma(\hat{\bold{a}}_i)} (-z)^{-a_i} \F{q+1}{p-1}{a_i,1+a_i-\bold{b}}{1+a_i-\hat{\bold{a}}_i}{\frac{(-1)^{p-q-1}}{z}}
 \end{equation*}
