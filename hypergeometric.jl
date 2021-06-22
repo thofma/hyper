@@ -265,7 +265,7 @@ end
 
 function native_string(x::narb)
   d = precision(x)
-  d = clamp(d, 10, 1000)
+  d = clamp(d, 10, 300)
   d = trunc(Int, d*0.30103)
   cstr = ccall((:arb_get_str, Nemo.libarb), Ptr{UInt8},
          (Ref{narb}, Int, UInt),
@@ -1345,9 +1345,8 @@ function rgamma(a::nacb, p::Int)
 end
 
 function gamma(a::fmpq, p::Int)
-println("calling arb_gamma_fmpq(", a, ", prec = ", p, ")")
   z = narb()
-@time  ccall((:arb_gamma_fmpq, libarb), Nothing,
+  ccall((:arb_gamma_fmpq, libarb), Nothing,
         (Ref{narb}, Ref{fmpq}, Int),
         z, a, p)
   return z
@@ -1358,9 +1357,8 @@ function rgamma(a::fmpq, p::Int)
 end
 
 function rising_factorial(a::fmpq, n::Int, p::Int)
-println("calling arb_rising_fmpq_ui(", a, ", ", n,", prec = ", p, ")")
   z = narb()
-@time  ccall((:arb_rising_fmpq_ui, libarb), Nothing,
+  ccall((:arb_rising_fmpq_ui, libarb), Nothing,
         (Ref{narb}, Ref{fmpq}, UInt, Int),
         z, a, UInt(n), p)
   return z
@@ -1419,11 +1417,11 @@ end
 
 mutable struct bimatrix
   isexact::Bool
-  m::fmpz_mat
-  m_approx::narb_mat
-  n::fmpz_mat
-  n_approx::narb_mat
-  q::fmpz
+  p::fmpz_mat
+  p_approx::narb_mat
+  q::fmpz_mat
+  q_approx::narb_mat
+  r::fmpz
 end
 
 function bimatrix(d::Int)
@@ -1437,25 +1435,23 @@ end
 
 function force_approx!(z::bimatrix, p::Int)
   z.isexact || return
-@assert !iszero(z.q)
   z.isexact = false
-  d = nrows(z.n)
+  d = nrows(z.q)
   for i in 1:d, j in 1:d
-    z.m_approx[i,j] = narb(z.m[i,j]//z.q, p)
-    z.n_approx[i,j] = narb(z.n[i,j]//z.q, p)
+    z.p_approx[i,j] = narb(z.p[i,j]//z.r, p)
+    z.q_approx[i,j] = narb(z.q[i,j]//z.r, p)
   end
 end
 
 function limit_prec!(z::bimatrix, p::Int)
   z.isexact || return
-@assert !iszero(z.q)
   p += 20
-  if nbits(z.q) > p
+  if nbits(z.r) > p
     force_approx!(z, p)
   end
-  d = nrows(z.n)
+  d = nrows(z.q)
   for i in 1:d, j in 1:d
-    if nbits(z.m[i,j]) > p || nbits(z.n[i,j]) > p
+    if nbits(z.p[i,j]) > p || nbits(z.q[i,j]) > p
       force_approx!(z, p)
       return
     end
@@ -1469,55 +1465,42 @@ function sum_bs_recursive!(
   k1::Int, k2::Int,
   num::Vector{fmpz_poly}, den::fmpz_poly,
   prec::Int)
-#=
-println("num: ")
-for n in num
-println(n)
-end
-@show den
-=#
+
   d = length(num)
 
   if k2-k1<=20
     z.isexact = true
-    zero!(z.m)
-    one!(z.n)
+    zero!(z.p)
     one!(z.q)
+    one!(z.r)
     for k in k1:k2-1
-#@show k
       q2 = evaluate(den, k)
-      @assert !iszero(q2)
       if d>1
         e = [evaluate(num[i], k) for i in 1:d]
         for j in 1:d
-          tt = q2*z.n[d,j]
-          z.n[d,j] = e[1]*z.n[1,j] + e[d]*z.n[d,j]
+          tt = q2*z.q[d,j]
+          z.q[d,j] = e[1]*z.q[1,j] + e[d]*z.q[d,j]
           for i in 2:d-1
-            z.n[d,j] += e[i]*z.n[i,j]
-            z.n[i-1,j] = q2*z.n[i,j]
+            z.q[d,j] += e[i]*z.q[i,j]
+            z.q[i-1,j] = q2*z.q[i,j]
           end
-          z.n[d-1,j] = tt
+          z.q[d-1,j] = tt
         end
       else
-        z.n[1,1] *= evaluate(num[1], k)
+        z.q[1,1] *= evaluate(num[1], k)
       end
-      mul!(z.m, q2)
-      add!(z.m, z.m, z.n)
-      z.q *= q2
-#@show z.m
-#@show z.n
-#@show z.q
+      mul!(z.p, q2)
+      add!(z.p, z.p, z.q)
+      z.r *= q2
     end
-    g = z.q
+    g = z.r
     for i in 1:d, j in 1:d
-      g = gcd(g, z.n[i,j])
-      g = gcd(g, z.m[i,j])
+      g = gcd(g, z.q[i,j])
+      g = gcd(g, z.p[i,j])
     end
-    z.m = divexact(z.m, g)
-    z.n = divexact(z.n, g)
+    z.p = divexact(z.p, g)
     z.q = divexact(z.q, g)
-@assert !iszero(z.q)
-#@show (z.m, z.n, z.q)
+    z.r = divexact(z.r, g)
   else
     k12 = div(k1+k2,2)
     z1 = bimatrix(d)
@@ -1528,27 +1511,18 @@ end
     limit_prec!(z2, prec)
     z.isexact = z1.isexact && z2.isexact
     if z.isexact
-      mul!(z.m, z2.m, z1.n)
-      addmul!(z.m, z1.m, z2.q)
-      mul!(z.n, z2.n, z1.n)
-      mul!(z.q, z1.q, z2.q)
+      mul!(z.p, z2.p, z1.q)
+      addmul!(z.p, z1.p, z2.r)
+      mul!(z.q, z2.q, z1.q)
+      mul!(z.r, z1.r, z2.r)
     else
       force_approx!(z1, prec)
       force_approx!(z2, prec)
-      mul!(z.m_approx, z2.m_approx, z1.n_approx, prec)
-      add!(z.m_approx, z.m_approx, z1.m_approx, prec)
-      mul!(z.n_approx, z2.n_approx, z1.n_approx, prec)
+      mul!(z.p_approx, z2.p_approx, z1.q_approx, prec)
+      add!(z.p_approx, z.p_approx, z1.p_approx, prec)
+      mul!(z.q_approx, z2.q_approx, z1.q_approx, prec)
     end
   end
-#=
-println((k1, k2), " returning ")
-if z.isexact
-  @show (z.m,z.n,z.q)
-else
-  @show z.m_approx
-  @show z.n_approx
-end
-=#
 end
 
 
@@ -1573,28 +1547,21 @@ function sum_bs(
 
   d = length(eq) - 1
   req = rescale(eq)
-#@show req
 
   s = zero(narb)
   if k > d
     z = bimatrix(d)
-
-#@show req[2:end]
-#@show -req[1]
-
     sum_bs_recursive!(z, d, k, req[d+1:-1:2], -req[1], p)
     force_approx!(z, p)
-#@show z.m_approx
     t = zero(narb)
     for i in 1:d
-      add!(s, s, mul!(t, z.m_approx[d,i], iv[i], p), p)
+      add!(s, s, mul!(t, z.p_approx[d,i], iv[i], p), p)
     end
   end
 
   for i in min(k,d):-1:1
     add!(s, s, iv[i], p+20)
   end
-#  @show s
   s
 end
 
@@ -1724,7 +1691,6 @@ function funny_hyp(
     eq = hadamard_product(eq, [(θ+σ)*(θ-1+σ+a[end]+m), -(θ-1+σ)])
     iv = initial_values(eq, [F(1)])
 @time    tail = sum_bs(N, eq, iv, prec + length(eq) + 2*nbits(N))
-println("-- sums done --")
     mul!(tail, tail, mul(rgamma(σ+a[end]+m, prec), inv(σ), prec), prec)
   else
     @assert false
@@ -1733,7 +1699,6 @@ println("-- sums done --")
   for i in 1:q
     mul!(f, f, mul(gamma(b[i], prec), rgamma(a[i], prec), prec), prec)
   end
-println("-- gammas done --")
   return add(plain, mul(f, tail, prec), prec)
 end
 
@@ -3450,7 +3415,8 @@ end
 
 run_benchmarks()
 
-for digits in [50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200]
+# check special heuristic computation at 1
+for digits in [50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600]
 m = trunc(Int, digits*4.0)
 N = trunc(Int, digits*1.0)
 p = trunc(Int, digits*3.322)
@@ -3465,10 +3431,8 @@ println("---- check ----")
 @time s2 = funny_hyp(map(QQ,[1//2,1//3,1//4,3//5]),
                      map(QQ, [5//4,7//6,1//8]), QQ(1),
                      m+100, N+100, p+100)
-@assert overlaps(s1, s2)
+@show sub(s1, s2, p+100)
 end
 
 nothing
-
-
 
