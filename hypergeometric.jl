@@ -2,7 +2,8 @@ using Nemo, Test
 import Nemo: libarb, libflint, arf_struct, arb_struct, mag_struct
 import Nemo: expressify, iszero, isfinite, contains_zero
 import Nemo: zero!, one!, add!, sub!, mul!, div!, inv!, coeff,
-       setcoeff!, mullow, gamma, rgamma, solve, overlaps, sub
+       setcoeff!, mullow, gamma, rgamma, solve, overlaps, sub, derivative,
+       rising_factorial, nbits
 
 const ARF_PREC_EXACT = typemax(Int)
 
@@ -96,6 +97,27 @@ end
 
 function _arb_poly_clear_fn(x::narb_poly)
   ccall((:arb_poly_clear, libarb), Nothing, (Ref{narb_poly}, ), x)
+end
+
+
+mutable struct narb_mat
+  entries::Ptr{Nothing}
+  r::Int
+  c::Int
+  rows::Ptr{Nothing}
+
+  function narb_mat(r::Int, c::Int)
+    z = new()
+    ccall((:acb_mat_init, libarb), Nothing,
+          (Ref{narb_mat}, Int, Int),
+          z, r, c)
+    finalizer(_arb_mat_clear_fn, z)
+    return z
+  end
+end
+
+function _arb_mat_clear_fn(a::narb_mat)
+  ccall((:arb_mat_clear, libarb), Nothing, (Ref{narb_mat}, ), a)
 end
 
 
@@ -279,7 +301,7 @@ function Base.show(io::IO, a::Union{narb_poly, nacb_poly})
   end
 end
 
-function Base.show(io::IO, a::nacb_mat)
+function Base.show(io::IO, a::Union{narb_mat,nacb_mat})
   println(io, string(nrows(a))*" by "*string(ncols(a)))
   println(io, " [")
   for i in 1:nrows(a), j in 1:ncols(a)
@@ -309,9 +331,31 @@ function radius(a::nacb)
 end
 
 
+nrows(a::narb_mat) = a.r
+ncols(a::narb_mat) = a.c
 nrows(a::nacb_mat) = a.r
-
 ncols(a::nacb_mat) = a.c
+
+function getindex!(z::narb, a::narb_mat, i::Int, j::Int)
+  GC.@preserve a begin
+    aij = ccall((:arb_mat_entry_ptr, libarb), Ptr{nacb},
+                (Ref{narb_mat}, Int, Int),
+                a, i - 1, j - 1)
+    ccall((:arb_set, libarb), Nothing,
+          (Ref{narb}, Ptr{narb}),
+          z, aij)
+  end
+  return z
+end
+
+function Base.getindex(a::narb_mat, i::Int, j::Int)
+  @assert 0 < i <= nrows(a)
+  @assert 0 < j <= ncols(a)
+  z = narb()
+  getindex!(z, a, i, j)
+  return z
+end
+
 
 function getindex!(z::nacb, a::nacb_mat, i::Int, j::Int)
   GC.@preserve a begin
@@ -331,6 +375,18 @@ function Base.getindex(a::nacb_mat, i::Int, j::Int)
   z = nacb()
   getindex!(z, a, i, j)
   return z
+end
+
+function Base.setindex!(a::narb_mat, b::narb, i::Int, j::Int)
+  GC.@preserve a begin
+    aij = ccall((:arb_mat_entry_ptr, libarb), Ptr{narb},
+                (Ref{narb_mat}, Int, Int),
+                 a, i - 1, j - 1)
+    ccall((:arb_set, libarb), Nothing,
+          (Ptr{narb}, Ref{narb}),
+          aij, b)
+  end
+  return b
 end
 
 function Base.setindex!(a::nacb_mat, i::Int, j::Int, b::nacb)
@@ -712,6 +768,11 @@ function mul!(z::T, x::T, y::fmpq, p::Int) where T <: Union{narb, nacb}
   return z
 end
 
+function add!(z::T, x::T, y::fmpq, p::Int) where T <: Union{narb, nacb}
+  add!(z, x, T(y, p), p)
+end
+
+
 function mullow(a::narb_poly, b::narb_poly, ord::Int, p::Int)
   z = narb_poly()
   ccall((:arb_poly_mullow, libarb), Nothing,
@@ -1078,6 +1139,21 @@ function solve(a::nacb_mat, b::nacb_mat, p::Int)
   return z
 end
 
+function add!(z::narb_mat, a::narb_mat, b::narb_mat, p::Int)
+  ccall((:arb_mat_add, libarb), Cint,
+        (Ref{narb_mat}, Ref{narb_mat}, Ref{narb_mat}, Int),
+        z, a, b, p)
+  return z
+end
+
+function mul!(z::narb_mat, a::narb_mat, b::narb_mat, p::Int)
+  ccall((:arb_mat_mul, libarb), Cint,
+        (Ref{narb_mat}, Ref{narb_mat}, Ref{narb_mat}, Int),
+        z, a, b, p)
+  return z
+end
+
+
 function mul(a::nacb_mat, b::nacb_mat, p::Int)
   z = nacb_mat(nrows(a), ncols(b))
   ccall((:acb_mat_mul, libarb), Cint,
@@ -1201,6 +1277,28 @@ function add_error!(z::nacb, a::narb)
   return z
 end
 
+nrows(a::fmpz_mat) = a.r
+
+ncols(a::fmpz_mat) = a.c
+
+
+function zero!(z::fmpz_mat)
+  ccall((:fmpz_mat_zero, libflint), Nothing,
+        (Ref{fmpz_mat}, ),
+        z)
+end
+
+function one!(z::fmpz_mat)
+  ccall((:fmpz_mat_one, libflint), Nothing,
+        (Ref{fmpz_mat}, ),
+        z)
+end
+
+function one!(z::fmpz)
+  ccall((:fmpz_set_ui, libflint), Nothing,
+        (Ref{fmpz}, UInt),
+        z, 1)
+end
 
 #### special functions required for field F with elem_type T ###################
 
@@ -1230,18 +1328,57 @@ function nacb(x::fmpq, p::Int)
   return z
 end
 
+function gamma(a::nacb, p::Int)
+  z = nacb()
+  ccall((:acb_gamma, libarb), Nothing,
+        (Ref{nacb}, Ref{nacb}, Int),
+        z, a, p)
+  return z
+end
 
-#### diff equation satisfied by pFq ############################################
+function rgamma(a::nacb, p::Int)
+  z = nacb()
+  ccall((:acb_rgamma, libarb), Nothing,
+        (Ref{nacb}, Ref{nacb}, Int),
+        z, a, p)
+  return z
+end
 
-# x is the independent variable. θ = x d/dx is the operator.
-# θ*x = x*θ - x
+function gamma(a::fmpq, p::Int)
+println("calling arb_gamma_fmpq(", a, ", prec = ", p, ")")
+  z = narb()
+@time  ccall((:arb_gamma_fmpq, libarb), Nothing,
+        (Ref{narb}, Ref{fmpq}, Int),
+        z, a, p)
+  return z
+end
+
+function rgamma(a::fmpq, p::Int)
+  return inv(gamma(a,p),p)
+end
+
+function rising_factorial(a::fmpq, n::Int, p::Int)
+println("calling arb_rising_fmpq_ui(", a, ", ", n,", prec = ", p, ")")
+  z = narb()
+@time  ccall((:arb_rising_fmpq_ui, libarb), Nothing,
+        (Ref{narb}, Ref{fmpq}, UInt, Int),
+        z, a, UInt(n), p)
+  return z
+end
+
+function nbits(a::Int)
+  return nbits(fmpz(a))
+end
 
 # hack
-function Nemo.AbstractAlgebra.Generic.derivative(f::FracElem)
+function derivative(f::FracElem)
   n = numerator(f)
   d = denominator(f)
   return (derivative(n)*d - n*derivative(d))//d^2
 end
+
+
+#### recurrence relations and diff equations ###################################
 
 # equation c maintains θ on right as c0(x) + c1(x)*θ + c2(x)*θ^2 + ...
 # do c = fmul*θ*fmul^-1*c + d*c where logdm = fmul'/fmul
@@ -1279,6 +1416,327 @@ function equ_sub!(c1::Vector, c2::Vector)
   end
   return c1
 end
+
+mutable struct bimatrix
+  isexact::Bool
+  m::fmpz_mat
+  m_approx::narb_mat
+  n::fmpz_mat
+  n_approx::narb_mat
+  q::fmpz
+end
+
+function bimatrix(d::Int)
+  return bimatrix(true,
+                  zero_matrix(ZZ, d, d),
+                  narb_mat(d, d),
+                  zero_matrix(ZZ, d, d),
+                  narb_mat(d, d),
+                  zero(ZZ))
+end
+
+function force_approx!(z::bimatrix, p::Int)
+  z.isexact || return
+@assert !iszero(z.q)
+  z.isexact = false
+  d = nrows(z.n)
+  for i in 1:d, j in 1:d
+    z.m_approx[i,j] = narb(z.m[i,j]//z.q, p)
+    z.n_approx[i,j] = narb(z.n[i,j]//z.q, p)
+  end
+end
+
+function limit_prec!(z::bimatrix, p::Int)
+  z.isexact || return
+@assert !iszero(z.q)
+  p += 20
+  if nbits(z.q) > p
+    force_approx!(z, p)
+  end
+  d = nrows(z.n)
+  for i in 1:d, j in 1:d
+    if nbits(z.m[i,j]) > p || nbits(z.n[i,j]) > p
+      force_approx!(z, p)
+      return
+    end
+  end
+end
+
+
+
+function sum_bs_recursive!(
+  z::bimatrix,
+  k1::Int, k2::Int,
+  num::Vector{fmpz_poly}, den::fmpz_poly,
+  prec::Int)
+#=
+println("num: ")
+for n in num
+println(n)
+end
+@show den
+=#
+  d = length(num)
+
+  if k2-k1<=20
+    z.isexact = true
+    zero!(z.m)
+    one!(z.n)
+    one!(z.q)
+    for k in k1:k2-1
+#@show k
+      q2 = evaluate(den, k)
+      @assert !iszero(q2)
+      if d>1
+        e = [evaluate(num[i], k) for i in 1:d]
+        for j in 1:d
+          tt = q2*z.n[d,j]
+          z.n[d,j] = e[1]*z.n[1,j] + e[d]*z.n[d,j]
+          for i in 2:d-1
+            z.n[d,j] += e[i]*z.n[i,j]
+            z.n[i-1,j] = q2*z.n[i,j]
+          end
+          z.n[d-1,j] = tt
+        end
+      else
+        z.n[1,1] *= evaluate(num[1], k)
+      end
+      mul!(z.m, q2)
+      add!(z.m, z.m, z.n)
+      z.q *= q2
+#@show z.m
+#@show z.n
+#@show z.q
+    end
+    g = z.q
+    for i in 1:d, j in 1:d
+      g = gcd(g, z.n[i,j])
+      g = gcd(g, z.m[i,j])
+    end
+    z.m = divexact(z.m, g)
+    z.n = divexact(z.n, g)
+    z.q = divexact(z.q, g)
+@assert !iszero(z.q)
+#@show (z.m, z.n, z.q)
+  else
+    k12 = div(k1+k2,2)
+    z1 = bimatrix(d)
+    sum_bs_recursive!(z1, k1, k12, num, den, prec)
+    z2 = bimatrix(d)
+    sum_bs_recursive!(z2, k12, k2, num, den, prec)
+    limit_prec!(z1, prec)
+    limit_prec!(z2, prec)
+    z.isexact = z1.isexact && z2.isexact
+    if z.isexact
+      mul!(z.m, z2.m, z1.n)
+      addmul!(z.m, z1.m, z2.q)
+      mul!(z.n, z2.n, z1.n)
+      mul!(z.q, z1.q, z2.q)
+    else
+      force_approx!(z1, prec)
+      force_approx!(z2, prec)
+      mul!(z.m_approx, z2.m_approx, z1.n_approx, prec)
+      add!(z.m_approx, z.m_approx, z1.m_approx, prec)
+      mul!(z.n_approx, z2.n_approx, z1.n_approx, prec)
+    end
+  end
+#=
+println((k1, k2), " returning ")
+if z.isexact
+  @show (z.m,z.n,z.q)
+else
+  @show z.m_approx
+  @show z.n_approx
+end
+=#
+end
+
+
+function rescale(eq::Vector{fmpq_poly})
+  g = content(eq[1])
+  for i in 2:length(eq)
+    g = gcd(g, content(eq[i]))
+  end
+  Zx,x = PolynomialRing(ZZ, "x")
+  return elem_type(Zx)[ map_coeffs(divexact(eq[i], g), parent=Zx) do c
+                          @assert isone(denominator(c))
+                          numerator(c)
+                        end
+                      for i in 1:length(eq)]  
+end
+
+function sum_bs(
+  k::Int,
+  eq::Vector{fmpq_poly},
+  iv::Vector,
+  p::Int)
+
+  d = length(eq) - 1
+  req = rescale(eq)
+#@show req
+
+  s = zero(narb)
+  if k > d
+    z = bimatrix(d)
+
+#@show req[2:end]
+#@show -req[1]
+
+    sum_bs_recursive!(z, d, k, req[d+1:-1:2], -req[1], p)
+    force_approx!(z, p)
+#@show z.m_approx
+    t = zero(narb)
+    for i in 1:d
+      add!(s, s, mul!(t, z.m_approx[d,i], iv[i], p), p)
+    end
+  end
+
+  for i in min(k,d):-1:1
+    add!(s, s, iv[i], p+20)
+  end
+#  @show s
+  s
+end
+
+#=
+ a0(n)*A[n] + a1(n)*A[n-1] + a2(n)*A[n-2] + a3(n)*A[n-3] == 0
+
+ b0(n)*B[n] + b1(n)*B[n-1] == 0
+
+ with C[n] = A[n]*B[n]
+
+  a0(n)*b0(n)*b0(n-1)*b0(n-2)*C[n]
+ -a1(n)*b1(n)*b0(n-1)*b0(n-2)*C[n-1]
+ +a2(n)*b1(n)*b1(n-1)*b0(n-2)*C[n-2]
+ -a3(n)*b1(n)*b1(n-1)*b1(n-2)*C[n-3] == 0
+=#
+function hadamard_product(A::Vector, B::Vector)
+  @assert length(B) == 2
+  Fθ = parent(B[1])
+  θ = gen(Fθ)
+  Ad = length(A) - 1
+  C = elem_type(Fθ)[]
+  t = prod(evaluate(B[1+0], θ-i+1) for i in 1:Ad)
+  push!(C, A[1+0]*t)
+  g = C[end]
+  for i in 1:Ad
+    t = divexact(t, evaluate(B[1+0], θ-i+1))
+    t = -t*evaluate(B[1+1], θ-i+1)
+    push!(C, A[1+i]*t)
+    g = gcd(g, C[end])
+  end
+  for i in 0:Ad
+    C[1+i] = divexact(C[1+i], g)
+  end
+  return C
+end
+
+function transpose_vars(Px::Vector, Fθ)
+  θ = gen(Fθ)
+  Pθ = elem_type(Fθ)[]
+  for i in (length(Px)-1):-1:0
+    for j in 0:degree(Px[1+i])
+      while j >= length(Pθ)
+        push!(Pθ, zero(Fθ))
+      end
+      setcoeff!(Pθ[1+j], i, coeff(Px[1+i], j))
+    end
+  end
+  return Pθ
+end
+
+function cauchy_product(Aθ::Vector, Bθ::Vector)
+  Fθ = parent(Bθ[1])
+  θ = gen(Fθ)
+  F = base_ring(Fθ)
+  Fx, x = PolynomialRing(F, "x")
+  Ax = transpose_vars(Aθ, Fx)
+  Bx = transpose_vars(Bθ, Fx)
+  @assert length(Bx) == 2
+
+  xlogdbx = -(Bx[1+0]+x*derivative(Bx[1+1]))//(Bx[1+1])
+
+  ra = length(Ax) - 1
+  FFx = parent(xlogdbx)
+  F = elem_type(FFx)[FFx(Ax[1+ra])]
+  for k in ra-1:-1:0
+    F = elem_type(FFx)[
+          ((i<length(F)) ? (x*derivative(F[1+i])-F[1+i]*xlogdbx) : zero(FFx)) +
+          ((i > 0) ? F[1+i-1] : FFx(Ax[1+k]))
+        for i in 0:length(F)]
+  end
+
+
+  # cancel content while θ is on the right
+  c = map(p -> (numerator(p), denominator(p)), F)
+  cont = zero(Fx)
+  den = one(Fx)
+  for ci in c
+    cont = gcd(cont, ci[1])
+    den = lcm(den, ci[2])
+  end
+  c = elem_type(Fx)[divexact(ci[1], cont)*divexact(den, ci[2]) for ci in c]
+
+  # move θ to the left
+  Cx = elem_type(Fx)[]
+  for ci in reverse(c)
+    equ_mul_θ_add!(Cx, ci, Fx)
+  end
+  return transpose_vars(Cx, Fθ)
+end
+
+function initial_values(A, v::Vector{T}) where T
+  iv = v # eh, clobber input
+  while length(iv)<length(A)-1
+    n = length(iv)
+    push!(iv, -sum(iv[n-i]*evaluate(A[2+i],n) for i in 0:n-1)//evaluate(A[1],n))
+  end
+#@show iv
+  return iv
+end
+
+function funny_hyp(
+  a::Vector{T}, b::Vector{T},
+  z::T,
+  m::Int, # number of terms for plain sum
+  N::Int, # number of terms for tail sum
+  prec::Int) where T
+
+  σ::T = sum(b) - sum(a)
+  q = length(b)
+  @assert q>1 && q+1==length(a)
+  F = parent(a[end])
+  Fθ, θ = PolynomialRing(F, "θ")
+  prec += 20
+  eq = [θ*prod(θ-1+i for i in b), -prod(θ-1+i for i in a)]
+@time  plain = sum_bs(m, eq, [one(F)], prec + 10 + 2*nbits(m))
+  # compute recurrence eq for buehring's coeffs Ak
+  t = 1 - a[1]
+  eq = [θ, -(θ-1+t)*(θ-1+b[1]-a[1])]
+  for i in 2:q
+    t += b[i-1]-a[i]
+    eq = hadamard_product(eq, [(θ-1+t), -one(Fθ)])
+    eq = cauchy_product(eq, [θ, -(θ-1+b[i]-a[i])])
+    eq = hadamard_product(eq, [one(Fθ), -(θ-1+t)])
+  end
+  # at this point eq is for Ak; now multiply it by the 2f1r(z)
+  if isone(z)
+    eq = hadamard_product(eq, [(θ+σ)*(θ-1+σ+a[end]+m), -(θ-1+σ)])
+    iv = initial_values(eq, [F(1)])
+@time    tail = sum_bs(N, eq, iv, prec + length(eq) + 2*nbits(N))
+println("-- sums done --")
+    mul!(tail, tail, mul(rgamma(σ+a[end]+m, prec), inv(σ), prec), prec)
+  else
+    @assert false
+  end
+  f = rising_factorial(a[end], m, prec)
+  for i in 1:q
+    mul!(f, f, mul(gamma(b[i], prec), rgamma(a[i], prec), prec), prec)
+  end
+println("-- gammas done --")
+  return add(plain, mul(f, tail, prec), prec)
+end
+
 
 # Return equation satisfied by m(x)*pFq(arg(x)) with θ on the left.
 # Allowed m's are those for which logdm(x) = m'(x)/m(x) is rational.
@@ -2554,21 +3012,6 @@ function cscpi_series(x::fmpz, ord::Int, p::Int)
   return z
 end
 
-function gamma(a::nacb, p::Int)
-  z = nacb()
-  ccall((:acb_gamma, libarb), Nothing,
-        (Ref{nacb}, Ref{nacb}, Int),
-        z, a, p)
-  return z
-end
-
-function rgamma(a::nacb, p::Int)
-  z = nacb()
-  ccall((:acb_rgamma, libarb), Nothing,
-        (Ref{nacb}, Ref{nacb}, Int),
-        z, a, p)
-  return z
-end
 
 # integers am[1] ≤ am[2] ≤ ... ≤ am[m]
 # the numerator parameters are λ + am[1], ..., λ + am[m], as[1], ... , as[.]
@@ -2622,35 +3065,7 @@ end
           * --------------------- exp(k*ε*log(z)) -------------------------------
             (1+λ+am[1+k]+k*ε-as)_t                            t!
 
-
-    Γ(b)                (λ+am[1+k]+k*ε)_t
-  = ---- *   Σ    Σ  ------------------------
-    Γ(as)  0≤k<m 0≤t Π_{i<m,i≠k} Γ(λ+am[1+i]+i*ε)
-
-                  * Π_{i<m,i≠k} g(am[1+i]-am[1+k], (i-k)*ε, t)
-
-                    g(as-λ-am[1+k], -k*ε, t)
-                  * ------------------------
-                    g(b-λ-am[1+k], -k*ε, t)
-
-                                    (-1)^(t*(p-q))*z^(t+λ+am[1+k])
-                  * exp(k*ε*log(z)) ------------------------------
-                                                t!
-
-
-    Γ(b)                (λ+am[1+k]+k*ε)_t
-  = ---- *   Σ    Σ  ------------------------
-    Γ(as)  0≤k<m 0≤t Π_{i<m,i≠k} Γ(λ+am[1+i]+i*ε)
-
-                  * (-1)^(t*(m-1)) * Π_{i<m,i≠k} g(am[1+i]-am[1+k], (i-k)*ε, t)/(-1)^t
-
-                    (-1)^(t*(p-m)) * Γ(as-λ-am[1+k]-t-k*ε)
-                  * -------------------------------------
-                    (-1)^(t*q) * Γ(b-λ-am[1+k]-t-k*ε)
-
-                                    (-1)^(t*(p-q))*z^(t+λ+am[1+k])
-                  * exp(k*ε*log(z)) ------------------------------
-                                                t!
+ ...
 
     Γ(b)                                    g(am[1+i]-am[1+k], (i-k)*ε, t)/(-1)^t
   = ---- *   Σ    Σ (λ+am[1+k]+k*ε)_t    Π  -------------------------------------
@@ -3035,5 +3450,25 @@ end
 
 run_benchmarks()
 
+for digits in [50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200]
+m = trunc(Int, digits*4.0)
+N = trunc(Int, digits*1.0)
+p = trunc(Int, digits*3.322)
+println()
+println("--------- $digits digits ----------")
+@time s1 = funny_hyp(map(QQ,[1//2,1//3,1//4,3//5]),
+                    map(QQ, [5//4,7//6,1//8]), QQ(1),
+                    m, N, p)
+@show (precision(s1)/3.322, s1)
+
+println("---- check ----")
+@time s2 = funny_hyp(map(QQ,[1//2,1//3,1//4,3//5]),
+                     map(QQ, [5//4,7//6,1//8]), QQ(1),
+                     m+100, N+100, p+100)
+@assert overlaps(s1, s2)
+end
+
 nothing
+
+
 

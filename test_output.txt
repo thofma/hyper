@@ -1,0 +1,569 @@
+************************** tests *****************************
+Test Summary:   | Pass  Total
+singular points |    6      6
+Test Summary:   | Pass  Total
+algebraic cases |   60     60
+Test Summary:  | Pass  Total
+function zeros |    3      3
+Test Summary: | Pass  Total
+entire case   |    4      4
+Test Summary:  | Pass  Total
+divergent case |    1      1
+************************** benchmarks *****************************
+ --------  fmpq[1//2, 1//3, 1//5, 1//4]  fmpq[8//7, 1//6, 1//9]  1//10  20 digits  -----------
+  0.000488 seconds (4.25 k allocations: 203.453 KiB)
+bits_lost = -4
+ --------  fmpq[1//2, 1//3, 1//5, 1//4]  fmpq[8//7, 1//6, 1//9]  -1//1 + 1//300*im  200 digits  -----------
+  0.020589 seconds (50.75 k allocations: 2.510 MiB)
+bits_lost = -9
+ --------  fmpq[1//2, 1//3, 1//5, 1//4]  fmpq[8//7, 1//6, 1//9]  1//300 + 1//1*im  200 digits  -----------
+  0.026656 seconds (56.64 k allocations: 2.922 MiB)
+bits_lost = -7
+ --------  fmpq[1//2, 1//3, 1//5, 1//4]  fmpq[8//7, 1//6, 1//9]  11//10  100 digits  -----------
+  0.049027 seconds (159.05 k allocations: 12.834 MiB)
+bits_lost = 3
+ --------  fmpq[1//2, 1//3, 1//5, 1//4]  fmpq[8//7, 1//6, 409//420]  11//10  100 digits  -----------
+  0.067580 seconds (183.62 k allocations: 15.284 MiB)
+bits_lost = 0
+ --------  fmpq[1//2, 1//3, 1//5, 1//4]  fmpq[8//7, 1//6, 1//9]  21//10 + 1//1*im  100 digits  -----------
+  0.011092 seconds (66.83 k allocations: 4.303 MiB)
+bits_lost = 7
+ --------  fmpq[1//2, 1//3, 1//5, 1//4]  fmpq[8//7, 1//6, 10//9]  21//10  100 digits  -----------
+  0.011855 seconds (74.65 k allocations: 5.186 MiB)
+bits_lost = 4
+ --------  fmpq[1//2, 1//3, 3//2, 3//2]  fmpq[8//7, 1//6, 409//420]  0//1 + 21//10*im  100 digits  -----------
+  0.066166 seconds (122.93 k allocations: 15.603 MiB)
+bits_lost = 7
+ --------  fmpq[1//2, 1//3, 3//2, 3//2]  fmpq[8//7, 1//6, 15//4]  0//1 + 21//10*im  100 digits  -----------
+  0.031742 seconds (101.38 k allocations: 7.598 MiB)
+bits_lost = 9
+ --------  fmpq[1//2, 1//3, 3//2, 3//2]  fmpq[8//7, 1//6, 409//420]  21//10  100 digits  -----------
+  0.065261 seconds (121.09 k allocations: 15.421 MiB)
+bits_lost = 6
+ --------  fmpq[1//2, 1//3, 3//2, 3//2]  fmpq[8//7, 1//6, 15//4]  21//10  100 digits  -----------
+  0.031539 seconds (100.01 k allocations: 7.448 MiB)
+bits_lost = 8
+ --------  fmpq[1//2, 1//3, 3//2, 5//2]  fmpq[8//7, 1//6, 15//4]  21//10  100 digits  -----------
+  0.033203 seconds (105.58 k allocations: 8.416 MiB)
+bits_lost = 6
+ --------  fmpq[1//2, 1//3, 1//3, 3//2, 3//2]  fmpq[8//7, 1//6, 37//10, 1//4]  21//10  100 digits  -----------
+  0.065712 seconds (139.15 k allocations: 14.871 MiB)
+bits_lost = 9
+ --------  fmpq[1//2, 1//3, 1//3, 3//2, 3//2, 4//3]  fmpq[8//7, 1//6, 7//2, 1//4, 1//5]  21//10  100 digits  -----------
+  0.097829 seconds (201.43 k allocations: 22.851 MiB)
+bits_lost = 10
+ --------  fmpq[1, 1, 2, 2, 3]  fmpq[3//2, 3//2, 3//2, 3//2]  21//10  100 digits  -----------
+  0.054996 seconds (252.85 k allocations: 17.027 MiB)
+bits_lost = 5
+ --------  fmpq[-2, 1, 2, 2, 3]  fmpq[4//3, 4//3, 4//3, 4//3]  21//10  100 digits  -----------
+  0.093606 seconds (197.11 k allocations: 14.420 MiB)
+bits_lost = 4
+total: 0.7290680408477783
+bits lost: 58
+
+--------- 50 digits ----------
+  0.012688 seconds (2.99 k allocations: 91.133 KiB, 97.25% compilation time)
+  0.000526 seconds (3.64 k allocations: 94.836 KiB)
+-- sums done --
+calling arb_gamma_fmpq(4835//24, prec = 186)
+  0.000025 seconds (14 allocations: 584 bytes)
+calling arb_rising_fmpq_ui(3//5, 200, prec = 186)
+  0.000024 seconds (11 allocations: 416 bytes)
+calling arb_gamma_fmpq(5//4, prec = 186)
+  0.000002 seconds (2 allocations: 80 bytes)
+calling arb_gamma_fmpq(1//2, prec = 186)
+  0.000001 seconds (2 allocations: 80 bytes)
+calling arb_gamma_fmpq(7//6, prec = 186)
+  0.000031 seconds (4 allocations: 168 bytes)
+calling arb_gamma_fmpq(1//3, prec = 186)
+  0.000000 seconds (2 allocations: 80 bytes)
+calling arb_gamma_fmpq(1//8, prec = 186)
+  0.000017 seconds (15 allocations: 560 bytes)
+calling arb_gamma_fmpq(1//4, prec = 186)
+  0.000001 seconds (2 allocations: 80 bytes)
+-- gammas done --
+  0.014073 seconds (9.39 k allocations: 305.005 KiB, 87.68% compilation time)
+(precision(s1) / 3.322, s1) = (55.38832028898254, [1.303201404759593923450502241430347081252424238290968287 +/- 3.21e-55])
+---- check ----
+  0.000483 seconds (3.23 k allocations: 76.570 KiB)
+  0.001550 seconds (10.24 k allocations: 267.914 KiB)
+-- sums done --
+calling arb_gamma_fmpq(7235//24, prec = 286)
+  0.000040 seconds (22 allocations: 1008 bytes)
+calling arb_rising_fmpq_ui(3//5, 300, prec = 286)
+  0.000023 seconds (25 allocations: 784 bytes)
+calling arb_gamma_fmpq(5//4, prec = 286)
+  0.000001 seconds (2 allocations: 112 bytes)
+calling arb_gamma_fmpq(1//2, prec = 286)
+  0.000001 seconds (2 allocations: 112 bytes)
+calling arb_gamma_fmpq(7//6, prec = 286)
+  0.000010 seconds (7 allocations: 384 bytes)
+calling arb_gamma_fmpq(1//3, prec = 286)
+  0.000001 seconds (2 allocations: 112 bytes)
+calling arb_gamma_fmpq(1//8, prec = 286)
+  0.000021 seconds (29 allocations: 1.227 KiB)
+calling arb_gamma_fmpq(1//4, prec = 286)
+  0.000001 seconds (2 allocations: 112 bytes)
+-- gammas done --
+  0.002783 seconds (16.24 k allocations: 464.028 KiB)
+
+--------- 100 digits ----------
+  0.000554 seconds (4.71 k allocations: 119.422 KiB)
+  0.001078 seconds (6.77 k allocations: 181.266 KiB)
+-- sums done --
+calling arb_gamma_fmpq(9635//24, prec = 352)
+  0.000018 seconds (27 allocations: 1.289 KiB)
+calling arb_rising_fmpq_ui(3//5, 400, prec = 352)
+  0.000012 seconds (28 allocations: 1.008 KiB)
+calling arb_gamma_fmpq(5//4, prec = 352)
+  0.000001 seconds (2 allocations: 128 bytes)
+calling arb_gamma_fmpq(1//2, prec = 352)
+  0.000001 seconds (2 allocations: 128 bytes)
+calling arb_gamma_fmpq(7//6, prec = 352)
+  0.000007 seconds (7 allocations: 448 bytes)
+calling arb_gamma_fmpq(1//3, prec = 352)
+  0.000001 seconds (2 allocations: 128 bytes)
+calling arb_gamma_fmpq(1//8, prec = 352)
+  0.000023 seconds (38 allocations: 1.688 KiB)
+calling arb_gamma_fmpq(1//4, prec = 352)
+  0.000001 seconds (2 allocations: 128 bytes)
+-- gammas done --
+  0.002298 seconds (14.26 k allocations: 421.818 KiB)
+(precision(s1) / 3.322, s1) = (105.3582179409994, [1.30320140475959392345050224143034708125242423829096828730032902702151405442052274164296615058016889754273 +/- 4.83e-105])
+---- check ----
+  0.000676 seconds (5.53 k allocations: 137.742 KiB)
+  0.002066 seconds (13.20 k allocations: 355.125 KiB)
+-- sums done --
+calling arb_gamma_fmpq(12035//24, prec = 452)
+  0.000048 seconds (36 allocations: 1.891 KiB)
+calling arb_rising_fmpq_ui(3//5, 500, prec = 452)
+  0.000014 seconds (53 allocations: 1.648 KiB)
+calling arb_gamma_fmpq(5//4, prec = 452)
+  0.000001 seconds (2 allocations: 160 bytes)
+calling arb_gamma_fmpq(1//2, prec = 452)
+  0.000000 seconds (2 allocations: 160 bytes)
+calling arb_gamma_fmpq(7//6, prec = 452)
+  0.000007 seconds (7 allocations: 568 bytes)
+calling arb_gamma_fmpq(1//3, prec = 452)
+  0.000001 seconds (2 allocations: 160 bytes)
+calling arb_gamma_fmpq(1//8, prec = 452)
+  0.000029 seconds (53 allocations: 2.531 KiB)
+calling arb_gamma_fmpq(1//4, prec = 452)
+  0.000001 seconds (2 allocations: 160 bytes)
+-- gammas done --
+  0.003373 seconds (21.57 k allocations: 616.498 KiB)
+
+--------- 200 digits ----------
+  0.001171 seconds (9.29 k allocations: 240.953 KiB)
+  0.002105 seconds (13.29 k allocations: 371.859 KiB)
+-- sums done --
+calling arb_gamma_fmpq(19235//24, prec = 684)
+  0.000028 seconds (49 allocations: 3.164 KiB)
+calling arb_rising_fmpq_ui(3//5, 800, prec = 684)
+  0.000025 seconds (82 allocations: 3.047 KiB)
+calling arb_gamma_fmpq(5//4, prec = 684)
+  0.000001 seconds (2 allocations: 208 bytes)
+calling arb_gamma_fmpq(1//2, prec = 684)
+  0.000001 seconds (2 allocations: 208 bytes)
+calling arb_gamma_fmpq(7//6, prec = 684)
+  0.000008 seconds (7 allocations: 776 bytes)
+calling arb_gamma_fmpq(1//3, prec = 684)
+  0.000000 seconds (2 allocations: 208 bytes)
+calling arb_gamma_fmpq(1//8, prec = 684)
+  0.000042 seconds (62 allocations: 3.648 KiB)
+calling arb_gamma_fmpq(1//4, prec = 684)
+  0.000001 seconds (2 allocations: 208 bytes)
+-- gammas done --
+  0.003961 seconds (25.49 k allocations: 741.615 KiB)
+(precision(s1) / 3.322, s1) = (205.2980132450331, [1.303201404759593923450502241430347081252424238290968287300329027021514054420522741642966150580168897542734625479833270056323027366263537191959334038232215605390884405104953650621523298660249093694220522337 +/- 1.59e-205])
+---- check ----
+  0.001265 seconds (9.84 k allocations: 252.523 KiB)
+  0.003348 seconds (19.51 k allocations: 519.562 KiB)
+-- sums done --
+calling arb_gamma_fmpq(21635//24, prec = 784)
+  0.000074 seconds (53 allocations: 3.656 KiB)
+calling arb_rising_fmpq_ui(3//5, 900, prec = 784)
+  0.000024 seconds (110 allocations: 3.578 KiB)
+calling arb_gamma_fmpq(5//4, prec = 784)
+  0.000001 seconds (2 allocations: 240 bytes)
+calling arb_gamma_fmpq(1//2, prec = 784)
+  0.000001 seconds (2 allocations: 240 bytes)
+calling arb_gamma_fmpq(7//6, prec = 784)
+  0.000026 seconds (7 allocations: 896 bytes)
+calling arb_gamma_fmpq(1//3, prec = 784)
+  0.000001 seconds (2 allocations: 240 bytes)
+calling arb_gamma_fmpq(1//8, prec = 784)
+  0.000049 seconds (75 allocations: 4.398 KiB)
+calling arb_gamma_fmpq(1//4, prec = 784)
+  0.000001 seconds (2 allocations: 240 bytes)
+-- gammas done --
+  0.005308 seconds (32.31 k allocations: 903.068 KiB)
+
+--------- 400 digits ----------
+  0.002582 seconds (18.04 k allocations: 488.453 KiB)
+  0.004822 seconds (25.58 k allocations: 736.016 KiB)
+-- sums done --
+calling arb_gamma_fmpq(38435//24, prec = 1348)
+  0.000103 seconds (72 allocations: 6.422 KiB)
+calling arb_rising_fmpq_ui(3//5, 1600, prec = 1348)
+  0.000048 seconds (211 allocations: 7.883 KiB)
+calling arb_gamma_fmpq(5//4, prec = 1348)
+  0.000002 seconds (2 allocations: 384 bytes)
+calling arb_gamma_fmpq(1//2, prec = 1348)
+  0.000001 seconds (2 allocations: 384 bytes)
+calling arb_gamma_fmpq(7//6, prec = 1348)
+  0.000015 seconds (7 allocations: 1.438 KiB)
+calling arb_gamma_fmpq(1//3, prec = 1348)
+  0.000001 seconds (2 allocations: 384 bytes)
+calling arb_gamma_fmpq(1//8, prec = 1348)
+  0.000103 seconds (107 allocations: 7.695 KiB)
+calling arb_gamma_fmpq(1//4, prec = 1348)
+  0.000001 seconds (2 allocations: 384 bytes)
+-- gammas done --
+  0.008318 seconds (46.71 k allocations: 1.335 MiB)
+(precision(s1) / 3.322, s1) = (405.17760385310055, [1.303201404759593923450502241430347081252424238290968287300329027021514054420522741642966150580168897542734625479833270056323027366263537191959334038232215605390884405104953650621523298660249093694220522337157305096378942860431767204349067211713128974239751031003370764360503934104660498885066123472239 +/- 3.56e-301])
+---- check ----
+  0.002906 seconds (18.83 k allocations: 512.195 KiB)
+  0.005995 seconds (31.24 k allocations: 879.422 KiB)
+-- sums done --
+calling arb_gamma_fmpq(40835//24, prec = 1448)
+  0.000087 seconds (72 allocations: 6.781 KiB)
+calling arb_rising_fmpq_ui(3//5, 1700, prec = 1448)
+  0.000050 seconds (226 allocations: 8.320 KiB)
+calling arb_gamma_fmpq(5//4, prec = 1448)
+  0.000002 seconds (2 allocations: 400 bytes)
+calling arb_gamma_fmpq(1//2, prec = 1448)
+  0.000001 seconds (2 allocations: 400 bytes)
+calling arb_gamma_fmpq(7//6, prec = 1448)
+  0.000013 seconds (7 allocations: 1.516 KiB)
+calling arb_gamma_fmpq(1//3, prec = 1448)
+  0.000000 seconds (2 allocations: 400 bytes)
+calling arb_gamma_fmpq(1//8, prec = 1448)
+  0.000111 seconds (119 allocations: 8.312 KiB)
+calling arb_gamma_fmpq(1//4, prec = 1448)
+  0.000001 seconds (2 allocations: 400 bytes)
+-- gammas done --
+  0.009759 seconds (53.18 k allocations: 1.500 MiB)
+
+--------- 800 digits ----------
+  0.005593 seconds (35.60 k allocations: 1.051 MiB)
+  0.010275 seconds (50.84 k allocations: 1.602 MiB)
+-- sums done --
+calling arb_gamma_fmpq(76835//24, prec = 2677)
+  0.000232 seconds (152 allocations: 13.031 KiB)
+calling arb_rising_fmpq_ui(3//5, 3200, prec = 2677)
+  0.000105 seconds (469 allocations: 19.016 KiB)
+calling arb_gamma_fmpq(5//4, prec = 2677)
+  0.000002 seconds (2 allocations: 704 bytes)
+calling arb_gamma_fmpq(1//2, prec = 2677)
+  0.000001 seconds (2 allocations: 704 bytes)
+calling arb_gamma_fmpq(7//6, prec = 2677)
+  0.000124 seconds (7 allocations: 2.703 KiB)
+calling arb_gamma_fmpq(1//3, prec = 2677)
+  0.000001 seconds (2 allocations: 704 bytes)
+calling arb_gamma_fmpq(1//8, prec = 2677)
+  0.000278 seconds (247 allocations: 16.414 KiB)
+calling arb_gamma_fmpq(1//4, prec = 2677)
+  0.000001 seconds (2 allocations: 704 bytes)
+-- gammas done --
+  0.017219 seconds (90.01 k allocations: 2.823 MiB)
+(precision(s1) / 3.322, s1) = (805.2378085490668, [1.303201404759593923450502241430347081252424238290968287300329027021514054420522741642966150580168897542734625479833270056323027366263537191959334038232215605390884405104953650621523298660249093694220522337157305096378942860431767204349067211713128974239751031003370764360503934104660498885066123472239 +/- 3.56e-301])
+---- check ----
+  0.005888 seconds (36.46 k allocations: 1.070 MiB)
+  0.011860 seconds (56.87 k allocations: 1.775 MiB)
+-- sums done --
+calling arb_gamma_fmpq(79235//24, prec = 2777)
+  0.000223 seconds (155 allocations: 13.531 KiB)
+calling arb_rising_fmpq_ui(3//5, 3300, prec = 2777)
+  0.000105 seconds (477 allocations: 19.453 KiB)
+calling arb_gamma_fmpq(5//4, prec = 2777)
+  0.000002 seconds (2 allocations: 736 bytes)
+calling arb_gamma_fmpq(1//2, prec = 2777)
+  0.000001 seconds (2 allocations: 736 bytes)
+calling arb_gamma_fmpq(7//6, prec = 2777)
+  0.000101 seconds (7 allocations: 2.820 KiB)
+calling arb_gamma_fmpq(1//3, prec = 2777)
+  0.000001 seconds (2 allocations: 736 bytes)
+calling arb_gamma_fmpq(1//8, prec = 2777)
+  0.000333 seconds (261 allocations: 17.148 KiB)
+calling arb_gamma_fmpq(1//4, prec = 2777)
+  0.000001 seconds (2 allocations: 736 bytes)
+-- gammas done --
+  0.019149 seconds (96.92 k allocations: 3.017 MiB)
+
+--------- 1600 digits ----------
+  0.013034 seconds (70.99 k allocations: 2.391 MiB)
+  0.024957 seconds (102.17 k allocations: 3.657 MiB)
+-- sums done --
+calling arb_gamma_fmpq(153635//24, prec = 5335)
+  0.000705 seconds (360 allocations: 38.555 KiB)
+calling arb_rising_fmpq_ui(3//5, 6400, prec = 5335)
+  0.000230 seconds (978 allocations: 44.977 KiB)
+calling arb_gamma_fmpq(5//4, prec = 5335)
+  0.000002 seconds (2 allocations: 1.344 KiB)
+calling arb_gamma_fmpq(1//2, prec = 5335)
+  0.000001 seconds (2 allocations: 1.344 KiB)
+calling arb_gamma_fmpq(7//6, prec = 5335)
+  0.000030 seconds (7 allocations: 5.320 KiB)
+calling arb_gamma_fmpq(1//3, prec = 5335)
+  0.000001 seconds (2 allocations: 1.344 KiB)
+calling arb_gamma_fmpq(1//8, prec = 5335)
+  0.001031 seconds (587 allocations: 46.984 KiB)
+calling arb_gamma_fmpq(1//4, prec = 5335)
+  0.000001 seconds (2 allocations: 1.344 KiB)
+-- gammas done --
+  0.040689 seconds (177.78 k allocations: 6.306 MiB)
+(precision(s1) / 3.322, s1) = (1605.3582179409993, [1.303201404759593923450502241430347081252424238290968287300329027021514054420522741642966150580168897542734625479833270056323027366263537191959334038232215605390884405104953650621523298660249093694220522337157305096378942860431767204349067211713128974239751031003370764360503934104660498885066123472239 +/- 3.56e-301])
+---- check ----
+  0.013291 seconds (71.68 k allocations: 2.413 MiB)
+  0.026777 seconds (109.25 k allocations: 3.895 MiB)
+-- sums done --
+calling arb_gamma_fmpq(156035//24, prec = 5435)
+  0.000726 seconds (367 allocations: 39.336 KiB)
+calling arb_rising_fmpq_ui(3//5, 6500, prec = 5435)
+  0.000277 seconds (983 allocations: 45.688 KiB)
+calling arb_gamma_fmpq(5//4, prec = 5435)
+  0.000002 seconds (2 allocations: 1.359 KiB)
+calling arb_gamma_fmpq(1//2, prec = 5435)
+  0.000001 seconds (2 allocations: 1.359 KiB)
+calling arb_gamma_fmpq(7//6, prec = 5435)
+  0.000030 seconds (7 allocations: 5.391 KiB)
+calling arb_gamma_fmpq(1//3, prec = 5435)
+  0.000001 seconds (2 allocations: 1.359 KiB)
+calling arb_gamma_fmpq(1//8, prec = 5435)
+  0.000973 seconds (593 allocations: 47.789 KiB)
+calling arb_gamma_fmpq(1//4, prec = 5435)
+  0.000001 seconds (2 allocations: 1.359 KiB)
+-- gammas done --
+  0.042754 seconds (185.57 k allocations: 6.570 MiB)
+
+--------- 3200 digits ----------
+  0.032234 seconds (141.22 k allocations: 5.370 MiB)
+  0.064439 seconds (208.64 k allocations: 8.516 MiB)
+-- sums done --
+calling arb_gamma_fmpq(307235//24, prec = 10650)
+  0.002629 seconds (677 allocations: 80.516 KiB)
+calling arb_rising_fmpq_ui(3//5, 12800, prec = 10650)
+  0.000545 seconds (2.00 k allocations: 104.867 KiB)
+calling arb_gamma_fmpq(5//4, prec = 10650)
+  0.000003 seconds (2 allocations: 2.641 KiB)
+calling arb_gamma_fmpq(1//2, prec = 10650)
+  0.000001 seconds (2 allocations: 2.641 KiB)
+calling arb_gamma_fmpq(7//6, prec = 10650)
+  0.000062 seconds (7 allocations: 10.508 KiB)
+calling arb_gamma_fmpq(1//3, prec = 10650)
+  0.000001 seconds (2 allocations: 2.641 KiB)
+calling arb_gamma_fmpq(1//8, prec = 10650)
+  0.003822 seconds (1.16 k allocations: 100.469 KiB)
+calling arb_gamma_fmpq(1//4, prec = 10650)
+  0.000002 seconds (2 allocations: 2.641 KiB)
+-- gammas done --
+  0.104473 seconds (356.41 k allocations: 14.314 MiB)
+(precision(s1) / 3.322, s1) = (3205.298013245033, [1.303201404759593923450502241430347081252424238290968287300329027021514054420522741642966150580168897542734625479833270056323027366263537191959334038232215605390884405104953650621523298660249093694220522337157305096378942860431767204349067211713128974239751031003370764360503934104660498885066123472239 +/- 3.56e-301])
+---- check ----
+  0.032727 seconds (143.13 k allocations: 5.511 MiB)
+  0.066365 seconds (215.68 k allocations: 8.819 MiB)
+-- sums done --
+calling arb_gamma_fmpq(309635//24, prec = 10750)
+  0.002669 seconds (684 allocations: 81.328 KiB)
+calling arb_rising_fmpq_ui(3//5, 12900, prec = 10750)
+  0.000550 seconds (2.00 k allocations: 105.789 KiB)
+calling arb_gamma_fmpq(5//4, prec = 10750)
+  0.000003 seconds (2 allocations: 2.656 KiB)
+calling arb_gamma_fmpq(1//2, prec = 10750)
+  0.000001 seconds (2 allocations: 2.656 KiB)
+calling arb_gamma_fmpq(7//6, prec = 10750)
+  0.000064 seconds (7 allocations: 10.609 KiB)
+calling arb_gamma_fmpq(1//3, prec = 10750)
+  0.000001 seconds (2 allocations: 2.656 KiB)
+calling arb_gamma_fmpq(1//8, prec = 10750)
+  0.003830 seconds (1.16 k allocations: 101.523 KiB)
+calling arb_gamma_fmpq(1//4, prec = 10750)
+  0.000001 seconds (2 allocations: 2.656 KiB)
+-- gammas done --
+  0.106957 seconds (365.36 k allocations: 14.760 MiB)
+
+--------- 6400 digits ----------
+  0.079617 seconds (285.44 k allocations: 13.073 MiB)
+  0.576713 seconds (519.13 k allocations: 22.739 MiB, 22.50% gc time, 0.73% compilation time)
+-- sums done --
+calling arb_gamma_fmpq(614435//24, prec = 21280)
+  0.011898 seconds (1.62 k allocations: 362.367 KiB)
+calling arb_rising_fmpq_ui(3//5, 25600, prec = 21280)
+  0.001353 seconds (4.05 k allocations: 257.789 KiB)
+calling arb_gamma_fmpq(5//4, prec = 21280)
+  0.000004 seconds (2 allocations: 5.234 KiB)
+calling arb_gamma_fmpq(1//2, prec = 21280)
+  0.000002 seconds (2 allocations: 5.234 KiB)
+calling arb_gamma_fmpq(7//6, prec = 21280)
+  0.000171 seconds (10 allocations: 49.672 KiB)
+calling arb_gamma_fmpq(1//3, prec = 21280)
+  0.000001 seconds (2 allocations: 5.234 KiB)
+calling arb_gamma_fmpq(1//8, prec = 21280)
+  0.018003 seconds (2.64 k allocations: 417.219 KiB)
+calling arb_gamma_fmpq(1//4, prec = 21280)
+  0.000005 seconds (2 allocations: 5.234 KiB)
+-- gammas done --
+  0.688991 seconds (815.59 k allocations: 37.095 MiB, 18.83% gc time, 0.61% compilation time)
+(precision(s1) / 3.322, s1) = (6405.177603853101, [1.303201404759593923450502241430347081252424238290968287300329027021514054420522741642966150580168897542734625479833270056323027366263537191959334038232215605390884405104953650621523298660249093694220522337157305096378942860431767204349067211713128974239751031003370764360503934104660498885066123472239 +/- 3.56e-301])
+---- check ----
+  0.084396 seconds (291.06 k allocations: 12.712 MiB)
+  0.184384 seconds (439.97 k allocations: 22.787 MiB)
+-- sums done --
+calling arb_gamma_fmpq(616835//24, prec = 21380)
+  0.012132 seconds (1.63 k allocations: 387.125 KiB)
+calling arb_rising_fmpq_ui(3//5, 25700, prec = 21380)
+  0.001408 seconds (4.05 k allocations: 259.125 KiB)
+calling arb_gamma_fmpq(5//4, prec = 21380)
+  0.000004 seconds (2 allocations: 5.266 KiB)
+calling arb_gamma_fmpq(1//2, prec = 21380)
+  0.000002 seconds (2 allocations: 5.266 KiB)
+calling arb_gamma_fmpq(7//6, prec = 21380)
+  0.000185 seconds (10 allocations: 49.938 KiB)
+calling arb_gamma_fmpq(1//3, prec = 21380)
+  0.000002 seconds (2 allocations: 5.266 KiB)
+calling arb_gamma_fmpq(1//8, prec = 21380)
+  0.018013 seconds (2.66 k allocations: 455.906 KiB)
+calling arb_gamma_fmpq(1//4, prec = 21380)
+  0.000006 seconds (2 allocations: 5.266 KiB)
+-- gammas done --
+  0.301619 seconds (742.07 k allocations: 36.844 MiB)
+
+--------- 12800 digits ----------
+  0.212639 seconds (565.88 k allocations: 28.513 MiB)
+  0.461570 seconds (857.70 k allocations: 56.733 MiB)
+-- sums done --
+calling arb_gamma_fmpq(1228835//24, prec = 42541)
+  0.057981 seconds (4.52 k allocations: 14.913 MiB)
+calling arb_rising_fmpq_ui(3//5, 51200, prec = 42541)
+  0.003419 seconds (8.15 k allocations: 587.211 KiB)
+calling arb_gamma_fmpq(5//4, prec = 42541)
+  0.000003 seconds (2 allocations: 10.422 KiB)
+calling arb_gamma_fmpq(1//2, prec = 42541)
+  0.000002 seconds (2 allocations: 10.422 KiB)
+calling arb_gamma_fmpq(7//6, prec = 42541)
+  0.000448 seconds (11 allocations: 145.891 KiB)
+calling arb_gamma_fmpq(1//3, prec = 42541)
+  0.000002 seconds (2 allocations: 10.422 KiB)
+calling arb_gamma_fmpq(1//8, prec = 42541)
+  0.086255 seconds (7.22 k allocations: 21.519 MiB)
+calling arb_gamma_fmpq(1//4, prec = 42541)
+  0.000003 seconds (2 allocations: 10.422 KiB)
+-- gammas done --
+  0.823949 seconds (1.45 M allocations: 122.718 MiB)
+(precision(s1) / 3.322, s1) = (12805.237808549067, [1.303201404759593923450502241430347081252424238290968287300329027021514054420522741642966150580168897542734625479833270056323027366263537191959334038232215605390884405104953650621523298660249093694220522337157305096378942860431767204349067211713128974239751031003370764360503934104660498885066123472239 +/- 3.56e-301])
+---- check ----
+  0.211328 seconds (575.12 k allocations: 29.142 MiB)
+  0.466770 seconds (980.40 k allocations: 62.704 MiB)
+-- sums done --
+calling arb_gamma_fmpq(1231235//24, prec = 42641)
+  0.058450 seconds (4.54 k allocations: 15.030 MiB)
+calling arb_rising_fmpq_ui(3//5, 51300, prec = 42641)
+  0.003432 seconds (8.15 k allocations: 588.469 KiB)
+calling arb_gamma_fmpq(5//4, prec = 42641)
+  0.000003 seconds (2 allocations: 10.453 KiB)
+calling arb_gamma_fmpq(1//2, prec = 42641)
+  0.000002 seconds (2 allocations: 10.453 KiB)
+calling arb_gamma_fmpq(7//6, prec = 42641)
+  0.000506 seconds (11 allocations: 146.195 KiB)
+calling arb_gamma_fmpq(1//3, prec = 42641)
+  0.000002 seconds (2 allocations: 10.453 KiB)
+calling arb_gamma_fmpq(1//8, prec = 42641)
+  0.086103 seconds (7.25 k allocations: 21.675 MiB)
+calling arb_gamma_fmpq(1//4, prec = 42641)
+  0.000003 seconds (2 allocations: 10.453 KiB)
+-- gammas done --
+  0.828297 seconds (1.58 M allocations: 129.594 MiB)
+
+--------- 25600 digits ----------
+  0.561807 seconds (1.31 M allocations: 75.994 MiB)
+  1.749988 seconds (3.95 M allocations: 228.130 MiB, 9.66% gc time)
+-- sums done --
+calling arb_gamma_fmpq(2457635//24, prec = 85063)
+  0.289785 seconds (16.43 k allocations: 126.224 MiB)
+calling arb_rising_fmpq_ui(3//5, 102400, prec = 85063)
+  0.008918 seconds (16.44 k allocations: 1.961 MiB)
+calling arb_gamma_fmpq(5//4, prec = 85063)
+  0.000006 seconds (3 allocations: 31.227 KiB)
+calling arb_gamma_fmpq(1//2, prec = 85063)
+  0.000004 seconds (3 allocations: 31.227 KiB)
+calling arb_gamma_fmpq(7//6, prec = 85063)
+  0.001530 seconds (24 allocations: 457.664 KiB)
+calling arb_gamma_fmpq(1//3, prec = 85063)
+  0.000004 seconds (3 allocations: 31.227 KiB)
+calling arb_gamma_fmpq(1//8, prec = 85063)
+  0.434114 seconds (24.68 k allocations: 180.902 MiB)
+calling arb_gamma_fmpq(1//4, prec = 85063)
+  0.000006 seconds (3 allocations: 31.227 KiB)
+-- gammas done --
+  3.049303 seconds (5.32 M allocations: 614.495 MiB, 5.54% gc time)
+(precision(s1) / 3.322, s1) = (25605.358217941, [1.303201404759593923450502241430347081252424238290968287300329027021514054420522741642966150580168897542734625479833270056323027366263537191959334038232215605390884405104953650621523298660249093694220522337157305096378942860431767204349067211713128974239751031003370764360503934104660498885066123472239 +/- 3.56e-301])
+---- check ----
+  0.556070 seconds (1.14 M allocations: 67.955 MiB)
+  1.215728 seconds (1.80 M allocations: 133.447 MiB)
+-- sums done --
+calling arb_gamma_fmpq(2460035//24, prec = 85163)
+  0.540237 seconds (51.58 k allocations: 126.877 MiB, 17.33% gc time)
+calling arb_rising_fmpq_ui(3//5, 102500, prec = 85163)
+  0.008705 seconds (16.47 k allocations: 2.248 MiB)
+calling arb_gamma_fmpq(5//4, prec = 85163)
+  0.000005 seconds (3 allocations: 31.250 KiB)
+calling arb_gamma_fmpq(1//2, prec = 85163)
+  0.000004 seconds (3 allocations: 31.250 KiB)
+calling arb_gamma_fmpq(7//6, prec = 85163)
+  0.001177 seconds (24 allocations: 458.156 KiB)
+calling arb_gamma_fmpq(1//3, prec = 85163)
+  0.000004 seconds (3 allocations: 31.250 KiB)
+calling arb_gamma_fmpq(1//8, prec = 85163)
+  0.433816 seconds (24.81 k allocations: 182.291 MiB)
+calling arb_gamma_fmpq(1//4, prec = 85163)
+  0.000005 seconds (3 allocations: 31.250 KiB)
+-- gammas done --
+  2.758841 seconds (3.03 M allocations: 514.102 MiB, 3.39% gc time)
+
+--------- 51200 digits ----------
+  1.427404 seconds (2.29 M allocations: 178.711 MiB)
+  3.600972 seconds (4.26 M allocations: 387.061 MiB, 4.08% gc time)
+-- sums done --
+calling arb_gamma_fmpq(4915235//24, prec = 170106)
+  1.503122 seconds (61.11 k allocations: 822.279 MiB, 0.52% gc time)
+calling arb_rising_fmpq_ui(3//5, 204800, prec = 170106)
+  0.023742 seconds (35.91 k allocations: 6.326 MiB)
+calling arb_gamma_fmpq(5//4, prec = 170106)
+  0.000026 seconds (3 allocations: 62.352 KiB)
+calling arb_gamma_fmpq(1//2, prec = 170106)
+  0.000018 seconds (3 allocations: 62.352 KiB)
+calling arb_gamma_fmpq(7//6, prec = 170106)
+  0.003392 seconds (71 allocations: 1.508 MiB)
+calling arb_gamma_fmpq(1//3, prec = 170106)
+  0.000006 seconds (3 allocations: 62.352 KiB)
+calling arb_gamma_fmpq(1//8, prec = 170106)
+  2.239714 seconds (92.72 k allocations: 1.178 GiB, 0.04% gc time)
+calling arb_gamma_fmpq(1//4, prec = 170106)
+  0.000008 seconds (3 allocations: 62.352 KiB)
+-- gammas done --
+  8.804916 seconds (6.74 M allocations: 2.545 GiB, 1.77% gc time)
+(precision(s1) / 3.322, s1) = (51205.29801324503, [1.303201404759593923450502241430347081252424238290968287300329027021514054420522741642966150580168897542734625479833270056323027366263537191959334038232215605390884405104953650621523298660249093694220522337157305096378942860431767204349067211713128974239751031003370764360503934104660498885066123472239 +/- 3.56e-301])
+---- check ----
+  1.603437 seconds (2.31 M allocations: 177.909 MiB, 2.62% gc time)
+  3.176938 seconds (3.60 M allocations: 359.082 MiB)
+-- sums done --
+calling arb_gamma_fmpq(4917635//24, prec = 170206)
+  1.735334 seconds (103.33 k allocations: 825.580 MiB, 5.62% gc time)
+calling arb_rising_fmpq_ui(3//5, 204900, prec = 170206)
+  0.023833 seconds (36.04 k allocations: 7.525 MiB)
+calling arb_gamma_fmpq(5//4, prec = 170206)
+  0.000027 seconds (3 allocations: 62.398 KiB)
+calling arb_gamma_fmpq(1//2, prec = 170206)
+  0.000026 seconds (3 allocations: 62.398 KiB)
+calling arb_gamma_fmpq(7//6, prec = 170206)
+  0.003262 seconds (55 allocations: 1.286 MiB)
+calling arb_gamma_fmpq(1//3, prec = 170206)
+  0.000005 seconds (3 allocations: 62.398 KiB)
+calling arb_gamma_fmpq(1//8, prec = 170206)
+  2.257511 seconds (92.78 k allocations: 1.179 GiB, 0.20% gc time)
+calling arb_gamma_fmpq(1//4, prec = 170206)
+  0.000007 seconds (3 allocations: 62.398 KiB)
+-- gammas done --
+  8.806786 seconds (6.14 M allocations: 2.521 GiB, 1.64% gc time)
+
