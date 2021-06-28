@@ -6,9 +6,20 @@
 \addtolength{\textheight}{2.0in}
 \addtolength{\voffset}{-1.25in}
 
+\numberwithin{equation}{section}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{entry}[theorem]{Entry}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{example}[theorem]{Example}
+%\mathtoolsset{showonlyrefs=true}
+
 \newcommand{\F}[5] {{}_{#1}F_{#2} \left( \begin{array}{c} #3 \\ #4 \end{array} \Big| #5  \right)}
 
-\author{Daniel Schultz}
+\author{Junxian Li \& Daniel Schultz}
 \title{Calculating $\, _{p}F_{q}$}
 \date{}
 
@@ -24,9 +35,9 @@ The function is undefined when any $b_i$ is $0,-1,-2,\dots$, i.e. $\Gamma(\bold{
 $\sigma = \Sigma(\bold{b}) - \Sigma(\bold{a})$ governs several properties of these functions. Whenever a possibly infinite quantity $\Gamma(a_i-a_j)$ appears in a formula, that formula should be interpret via a limiting cases of the general formula.
 
 \section{The case $p < q+1$ [not implemented]}
-Just sum the series for any argument. The problem for large $|z|$ is that many terms may be required before the partial sums start to approach the true value. Indeed in the special case of ${}_{1}F_{1}(a_1;b_1|z)$ the ratio of successive terms is
+Just sum the series for any argument. The problem for large $|z|$ is that many terms may be required before the partial sums start to approach the true value. Indeed, in the special case of ${}_{1}F_{1}(a_1;b_1|z)$ the ratio of successive terms is
 \begin{equation*}
-\frac{a+n}{b+n} \cdot \frac{z}{n} \approx \frac{z}{n}
+\frac{a_1+n}{b_1+n} \cdot \frac{z}{n} \approx \frac{z}{n}
 \end{equation*}
 and at approximately $|z|$ terms have to be summed before the terms start to decrease. In this case, the formal expansion ($n = q+1-p$)
 \begin{align*}
@@ -39,7 +50,7 @@ which consists of $q+1$ formal series, is useful. The first $p$ series are hyper
 
 
 \section{The case $p > q+1$ [not implemented]}
-The formal series is divergent except for zero argument or terminating parameters and is $1/(p-q-1)$--Borel summable in a range of directions. For nonzero arguments this leads to ("The Borel Sum of Divergent Barnes Hypergeometric Series and its Application to a Partial Differential Equation" by Kunio Ichinobe)
+The formal series is divergent except for zero argument or terminating parameters and is $1/(p-q-1)$--Borel summable in a range of directions. For nonzero arguments this leads to (``The Borel Sum of Divergent Barnes Hypergeometric Series and its Application to a Partial Differential Equation'' by Kunio Ichinobe)
 \begin{equation*}
 \F{p}{q}{\bold{a}}{\bold{b}}{z} = \sum_{i=1}^{p} \frac{\Gamma(\bold{b}) \Gamma(\hat{\bold{a}}_i-a_i)}{\Gamma(\bold{b}-a_i) \Gamma(\hat{\bold{a}}_i)} (-z)^{-a_i} \F{q+1}{p-1}{a_i,1+a_i-\bold{b}}{1+a_i-\hat{\bold{a}}_i}{\frac{(-1)^{p-q-1}}{z}}
 \end{equation*}
@@ -71,22 +82,24 @@ It is also possible to use Pad\'e approximants here, but do we have useful error
 This is the most interesting case as the function can fail to be defined at one. The existence of $F(1)$ is determinded by $\Re(\sigma)> 0$. If $\sigma$ is not an integer we have
 \begin{equation}
 \label{nearone}
-F(1-z) = z^{\sigma} \sum_{n=0}^{\infty} u_n z^n + \sum_{n=0}^{\infty} v_n z^n
+F(1-z) = \sum_{n=0}^{\infty} u_n z^{\sigma+n} + \sum_{n=0}^{\infty} v_n z^n
 \end{equation}
 with the $u_1,u_2,\dots$ determined from recurrences by $u_0 = \Gamma(-\sigma)\Gamma(\bold{b})/\Gamma(\bold{a})$ and the $v_{p-1}, v_p, \dots$ are determined from recurrences by $v_0, \dots, v_{p-2}$. Thus the difficulty is computing these $v_0, \dots, v_{p-2}$.
 
 If $\sigma$ is an integer, then at most one $\log(z)$ enters into the series.
-\subsubsection{near one: generic approach}
+\subsubsection{generic approach}
 We simply evaluate Equation \eqref{nearone} and its derivatives up to and including order $p-1$ at $z=1/4$ to solve for the $u_0,v_0,\dots,v_{p-2}$. The explicit formula for $u_0$ is surprisingly useless in this approach.
 
-\subsubsection{near one: Buehring [not implemented - this section might even be wrong]}
+\subsubsection{Buehring [not implemented but this section is correct]}
 Here we sum the first $m$ terms of Equation \eqref{Fdef} and use a formula derived by Buehring to sum the remaining terms. Since we will generically be dealing with logarithmically convergent series (when $z=1$) in both sums, it is important to balance the choice of $m$ between the two to ensure a sub-exponential algorithm.
-We have (Equations 2.7 and 2.9 in ``analytic continuation of the generalized hypergeoemtric sereis near unit argument with emphasis on the zero-balanced series'' by Buehring and Srivastava)
-\begin{align*}
+We have (Equations (2.7) and (2.9) in ``analytic continuation of the generalized hypergeoemtric sereis near unit argument with emphasis on the zero-balanced series'' by Buehring and Srivastava)
+\begin{align}
+\nonumber
 \sum_{n=m}^{\infty}{\frac{(\bold{a})_n}{(\bold{b})_n} \frac{z^n}{n!}}&=\frac{\Gamma(\bold{b})}{\Gamma(\bold{a})} z^m \sum_{k=0}^{\infty} {\frac{\Gamma(\bold{a}+m+k)}{\Gamma(\bold{b}+m+k)} \frac{z^k}{\Gamma(1+m+k)}}\\
-&=\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} z^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \, _2\tilde{F}_1\left( \begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| z\right)
-\end{align*}
-where the $A_k$ are independent of $m$ and are polynomials in $a_1,\dots,a_{p-1},b_1,\dots,b_{p-1}$. They can be defined in the base case $p=2$ as
+\label{buehring}
+&=\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} z^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \,{} _2\tilde{F}_1\left( \begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| z\right)
+\end{align}
+where the $A_k(\hat{\bold{a}}_b; \bold{b})$ are independent of $m$ and are polynomials in $a_1,\dots,a_{p-1},b_1,\dots,b_{p-1}$. They can be defined in the base case $p=2$ as
 \begin{equation*}
 A_k\left(\begin{array}{c} a_1 \\ b_1 \end{array}\right) = \frac{(1-a_1)_k(b_1-a_1)_k}{k!}
 \end{equation*}
@@ -109,11 +122,58 @@ and therefore the bound
 k!F_k \ll k^{-\sigma} \left|1-1/z\right|^k + k^{-m-\sigma-a_p}
 \end{equation*}
 To ensure convergence of the tail series, we should have
-$|1-1/z|<1$ and $m+\operatorname{Re}(a_i)>0$ for all $i<p$.
+$|1-1/z|<1$ and $m+\Re(a_i)>0$ for all $i<p$.
 
 In reality the majorant method will probably produce a much worse explicit bound $|A_k/k!| \le c k^{\mu}$ so we are balancing the sum of the first $m$ terms of a sum whose terms are like $n^{-1-\sigma}$ with another series that we can only prove has terms like $k^{\mu-m-\sigma-a_p}$. Any reasonable overestimation of $\mu$ can be compensated by a larger $m$. Finally, in order to sum in total no more than $O(d)$ terms for $d$ digit accuracy, it probably suffices to take $m \approx d$ for reasonable parameter ranges.
 
-\section{old stuff}
+\subsubsection{hybrid approach for $\sigma \not \in \mathbb{Z}$}
+The necessary coefficients $u_0$ (respectively $v_0,\dots,v_{p-2}$) in \eqref{nearone} may be evaluated by combining \eqref{buehring} (with $z$ replaced by $1-z$) for $m=0$ (respectively large $m$) with the expansion
+\begin{align*}
+{}_2\tilde{F}_1\left(\begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| 1-z\right) &= \frac{\Gamma (-\sigma-k)}{\Gamma (a_p+m)} \sum_{j=0}^{\infty} \frac{(\sigma+a_p+m+k)_j}{j!}z^{\sigma+k+j}\\
+&+\frac{-1}{\Gamma
+   \left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(-\sigma-k)_{j+1}} z^j\text{.}
+\end{align*}
+The basic idea is that
+\begin{equation*}
+\sum_{n=0}^{m-1} \frac{(\bold a)_n}{(\bold b)_n}\frac{(1-z)^n}{n!} \approx v_0 + v_1 z + v_2 z^2 + \cdots\text{.}
+\end{equation*}
+This is no help in evaluating the $u_n$, but those can be found easily. We have
+
+\begin{align*}
+F(1-z)=\sum_{n=0}^{m-1} \frac{(\bold a)_n}{(\bold b)_n}\frac{(1-z)^n}{n!}&+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} (1-z)^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)}\,{} _2\tilde{F}_1\left( \begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| 1-z\right)\\
+=\sum_{n=0}^{m-1} \frac{(\bold a)_n}{(\bold b)_n}\frac{(1-z)^n}{n!}&+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} (1-z)^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)}\frac{\Gamma (-\sigma-k)}{\Gamma (a_p+m)} \sum_{j=0}^{\infty} \frac{(\sigma+a_p+m+k)_j}{j!}z^{\sigma+k+j}\\
+&+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} (1-z)^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{-1}{\Gamma
+	\left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(-\sigma-k)_j} z^j.
+\end{align*}
+Taking $m=0$ and equating non-integral power of $z$ gives
+\begin{align*}
+\sum_{n=0}^\infty u_n z^{\sigma + n} &= \frac{\Gamma(\bold{b})}{\Gamma(\hat{\bold{a}}_p)} \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)}\frac{\Gamma (-\sigma-k)}{\Gamma (a_p)} \sum_{j=0}^\infty \frac{(\sigma+a_p+k)_j}{j!} z^{\sigma+k+j}\text{,}
+\end{align*}
+so that in particular $u_0=\Gamma(-\sigma)\Gamma(\bold b) / \Gamma (\bold a)$ and in general
+\begin{align*}
+u_n=\frac{\Gamma(\bold{b})}{\Gamma(\hat{\bold{a}}_p)} \sum_{k+j=n}{A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)}\frac{\Gamma (-\sigma-k)}{\Gamma (a_p)} \frac{(\sigma+a_p+k)_j}{j!}
+\end{align*}
+We also have from integral powers of $z$ the formula 
+\begin{align*}
+\sum_{n=0}^\infty v_nz^n=\sum_{n=0}^{m-1}{\frac{(\bold{a})_n}{(\bold{b})_n} \frac{(1-z)^n}{n!}}+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} \sum_{\ell=0}^\infty\frac{(-m)_\ell}{\ell!}z^\ell \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{1}{(\sigma+k) \Gamma
+	\left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(1-\sigma-k)_j} z^j.
+\end{align*}
+Taking a large arbitrary $m$ gives
+\begin{align*}
+v_i - [z^i] \sum_{n=0}^{m-1}{\frac{(\bold{a})_n}{(\bold{b})_n} \frac{(1-z)^n}{n!}} &= \sum_{\ell +j=i}\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)}\frac{(-m)_\ell}{\ell!}\sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{1}{(\sigma+k) \Gamma
+	\left(\sigma+a_p+m+k\right)}\frac{(a_p+m)_j}{(1-\sigma-k)_j}\\
+&= \frac{\Gamma(\bold{b}) (a_p)_m}{\Gamma(\hat{\bold{a}}_p) \Gamma\left(\sigma+a_p+m\right)} \sum_{j=0}^{i}\frac{(a_p+m)_j (-m)_{i-j}}{(i-j)!}\sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{-1}{\left(\sigma+a_p+m\right)_k (-\sigma-k)_{j+1}}
+\end{align*}
+This formula for the $v_i$ is as effective as the series in the previous section.
+
+\subsubsection{hybrid approach for $\sigma \in \mathbb{Z}$}
+Too messy.
+
+
+
+
+\section{implementation}
+
 \subsection{Tight ${}_2 F_1$ bounds everywhere}
 The analysis is for real parameters $a,b,c \in \mathbb{R}$, but it should be possible to do something for complex parameters too.
 
@@ -235,15 +295,13 @@ Now, we have
 = \frac{P(z,\theta)}{p_r(z)} - \frac{P(0,\theta)}{p_r(0)} \text{.}
 \end{equation*}
 For all differential equations arising from hypergeometric functions considered here, $\sum_{j=1}^{\infty} Q_j(\theta) z^j$ will be a finite linear combination of functions of the form ($i, k \ge 0$)
-\begin{equation*}
-z \frac{\partial}{\partial z} \frac{z^i}{(1-z)^k}, \quad
-z \frac{\partial}{\partial z} \log \left( \frac{1}{1-z} \right), \end{equation*}
-or
-\begin{equation*}
+\begin{gather*}
+z^i, \quad z \frac{\partial}{\partial z} \frac{z^i}{(1-z)^k}, \quad
+z \frac{\partial}{\partial z} \log \left( \frac{1}{1-z} \right),\\
 z \frac{\partial}{\partial z} \frac{z^i}{(1-z^2)^k}, \quad
-z \frac{\partial}{\partial z} \frac{1}{2} \log \left( \frac{1}{1-z^2} \right), \quad
-z \frac{\partial}{\partial z} \frac{1}{2}\log \left( \frac{1+z}{1-z} \right),
-\end{equation*}
+z \frac{\partial}{\partial z} \log \left( \frac{1}{1-z^2} \right), \quad
+z \frac{\partial}{\partial z} \log \left( \frac{1+z}{1-z} \right),
+\end{gather*}
 all with nonnegative coefficients as power series in $z$. The coefficients of the linear combination, say $f_j(\theta)$, will be polynomials in $\theta$. Bounding the combinations
 \begin{equation*}
 n \sum_{t=0}^{\tau(n) - 1} \left| [X^t] \frac{f_j(\lambda+n+X)}{X^{-\mu(\lambda+n)} Q_0(\lambda+n+X)} \right|
@@ -253,6 +311,78 @@ for each $j$ and for all $n \ge n_0$ will give a valid $\hat{a}(z)$ and a nice f
 \hat{y}(z)=\hat{h}(z) \int_0^z \frac{\hat{q}(z)/z}{\hat{h}(z)}{dz}
 \end{equation*}
 satisfies conditions 2 and 4.
+
+\subsection{series evaluation}
+
+For large enough $\tau$, the solution takes the form
+\begin{equation*}
+f(z) = \sum_{i=0}^{\infty} \sum_{j=0}^{\tau-1} u_{i,j} z^{\lambda+i} \log(z)^j/j!\text{,}
+\end{equation*}
+and the coefficients $u_{i,j}$ satsify $u_{i_,j} = 0$ for $j \ge \tau$. Therefore, write $u_i = \sum_{j=0}^{\tau-1} u_{i,j} \Lambda^{\tau-1-j}$ where \emph{everything is modulo $\Lambda^\tau$}.
+Eventually the coefficients $u_{i}$ satisfy a relation of the form
+\begin{equation}
+\label{unrec}
+u_n = a_1 u_{n-1} + \cdots + a_s u_{n-s}\text{,} \quad a_i \in \mathbb{F}(n)[\Lambda]
+\end{equation}
+Let $M_n \in \mathbb{F}(n)[\Lambda] ^{s \times s}$ be the companion matrix (with the $a_i$ on the first row) such that
+\begin{equation*}
+\left(\begin{array}{c}
+u_n\\
+\vdots \\
+u_{n-(s-1)}
+\end{array}\right)
+=M_n
+\left(\begin{array}{c}
+u_{n-1}\\
+\vdots \\
+u_{n-s}
+\end{array}\right)
+\end{equation*}
+Set $f_{[N_0,N_1)}(z) = \sum_{i=N_0}^{N_1-1} z^{\lambda+i} u_i(\log(z))$ where $u_i(\log(z))$ denotes $u_i \in \mathbb{F}[\Lambda]$ with $\Lambda^{\tau-1-j}$ replaced by $\log(z)^j/j!$.
+For the derivative $f^{(d)}(z)$ of order $d$ we have
+\begin{equation*}
+\left(\begin{array}{c}
+f_{[N_0,N_1)}^{(d)}(z) \\
+? \\
+\vdots
+\end{array}\right) = \sum_{i=N_0}^{N_1-1} z^{\lambda+i-d} (\Lambda+\lambda+i)^{(d)}\prod_{N_0\le \ell \le i}M_{\ell}
+\left(\begin{array}{c}
+u_{N_0-1}\\
+\vdots \\
+u_{N_0-s}
+\end{array}\right) (\log(z))\end{equation*}
+where $x^{(d)} := x(x-1)\cdots(x-(d-1))$ on the right hand side denotes the falling factorial. Therefore, to evaluate several derivatives of $f$, it suffices to take the first entry of the right hand side for several values of $d$, where the products $\prod_{N_0\le \ell < i}M_{\ell}$ can be reused. Furthermore, the final product $\prod_{N_0\le \ell < N_1}M(\ell)$, when multiplied by the initial values $u_{N_0-1}, \dots u_{N_0-s}$, gives the final $u_{N_1-1}, \dots, u_{N_1-s}$, which are needed for the estimation of the tail $\sum_{i=N_1}^{\infty} z^i u_i(\log(z))$.
+
+To avoid either a catastrophic linear loss of precision when the $a_i$ are approximate quantities or a slow algorithm when the $a_i$ are ``small'' exact quantities, the above sum should be evaluated via binary splitting: that is, for example
+\begin{align*}
+\sum_{i=0}^{7} z^{i} \prod_{0\le \ell \le i}M_{\ell} &= (M_0 + z M_1 M_0 + z^2(M_2 + z M_3 M_2) M_1 M_0)\\
+& \quad + z^4 (M_4 + z M_5 M_4 + z^2(M_6 + z M_7 M_6) M_5 M_4)M_3 M_2 M_1 M_0\text{.}
+\end{align*}
+
+\subsection{putting everything together}
+In section discusses the reliable evaluation of the solution and its derivatives, which can be writen as
+\begin{equation*}
+f^{(d)}(z) = f_{[0,N_0)}^{(d)}(z) + f_{[N_0,N_1)}^{(d)}(z) + f_{[N_1,\infty)}^{(d)}(z)
+\end{equation*}
+First observe that if
+\begin{equation*}
+f(z) = \sum_{i,j} u_{i,j} z^{\lambda+i} \log(z)^j/j!
+\end{equation*}
+then
+\begin{equation*}
+f'(z) = \sum_{i,j} \left((\lambda+i)u_{i,j} + u_{i,j+1}\right) z^{\lambda-1+i} \log(z)^j/j!
+\end{equation*}
+The the quantities $z^{\lambda+i} \log(z)^j/j!$ for integers $i$ and $j$ need to be evaluated reliably. This is a problem particularly when $z$ is close to zero (or a ball containing zero).
+
+The first block $f_{[0,N_0)}^{(d)}(z)$ includes those ``problematic'' terms $u_{i,j} z^{\lambda+i} \log(z)^j/j!$ where $\lambda+i$ is a root of $Q_0(\theta)$. These terms are problematic because the denominators of \eqref{unrec} could vanish, thus they should be dealt with separately. For each of these terms we just evaluate $z^{\lambda+i} \log(z)^j/j!$ directly and take care when $z$ contains zero, where the sign of $\Re(\lambda+i)$ is relevent.
+
+The next block also requires care with respect to the evaluation of $\log(z)$. What we actually get out of the previous section is a reliable evaluation of
+\begin{equation*}
+z^{d - N_0 - \lambda} f_{[N_0,N_1)}^{(d)}(z) = \sum_{j=0}^{\tau-1} e_j \Lambda^{\tau-1-j} \in \mathbb{C}[\Lambda]\text{,}
+\end{equation*}
+that is, we still have to evaluate $\sum_{j=0}^{\tau-1} e_j z^{\lambda+N_0-d}\log(z)^j/j!$ as reliably as possible. For this, it is helpful if $\Re(\lambda+N_0-d) > 0$ which is why it is a good ideal to choose a $N_0 > d$.
+
+For the final block, the majorant method produces a power series $\hat{B}(z) = \sum_{i=0}^{\infty} b_i z^i \in \mathbb{R}_{\ge 0}[z]$ with $|u_{N_1 + i,j}| < b_i$ for all $j$. We need to turn this into a bound on $f_{[N_1,\infty)}^{(d)}(z)$. This requires care as well. TODO.
 
 
 \end{document}
