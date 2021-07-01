@@ -128,11 +128,14 @@ In reality the majorant method will probably produce a much worse explicit bound
 
 \subsubsection{hybrid approach for $\sigma \not \in \mathbb{Z}$}
 The necessary coefficients $u_0$ (respectively $v_0,\dots,v_{p-2}$) in \eqref{nearone} may be evaluated by combining \eqref{buehring} (with $z$ replaced by $1-z$) for $m=0$ (respectively large $m$) with the expansion
-\begin{align*}
+\begin{equation}
+\label{2f1nearone}
+\begin{aligned}
 {}_2\tilde{F}_1\left(\begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| 1-z\right) &= \frac{\Gamma (-\sigma-k)}{\Gamma (a_p+m)} \sum_{j=0}^{\infty} \frac{(\sigma+a_p+m+k)_j}{j!}z^{\sigma+k+j}\\
 &+\frac{-1}{\Gamma
    \left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(-\sigma-k)_{j+1}} z^j\text{.}
-\end{align*}
+\end{aligned}
+\end{equation}
 The basic idea is that
 \begin{equation*}
 \sum_{n=0}^{m-1} \frac{(\bold a)_n}{(\bold b)_n}\frac{(1-z)^n}{n!} \approx v_0 + v_1 z + v_2 z^2 + \cdots\text{.}
@@ -145,29 +148,29 @@ F(1-z)=\sum_{n=0}^{m-1} \frac{(\bold a)_n}{(\bold b)_n}\frac{(1-z)^n}{n!}&+\frac
 &+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} (1-z)^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{-1}{\Gamma
 	\left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(-\sigma-k)_j} z^j.
 \end{align*}
-Taking $m=0$ and equating non-integral power of $z$ gives
+Taking $m=0$ and equating non-integral powers of $z$ gives
 \begin{align*}
 \sum_{n=0}^\infty u_n z^{\sigma + n} &= \frac{\Gamma(\bold{b})}{\Gamma(\hat{\bold{a}}_p)} \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)}\frac{\Gamma (-\sigma-k)}{\Gamma (a_p)} \sum_{j=0}^\infty \frac{(\sigma+a_p+k)_j}{j!} z^{\sigma+k+j}\text{,}
 \end{align*}
 so that in particular $u_0=\Gamma(-\sigma)\Gamma(\bold b) / \Gamma (\bold a)$ and in general
 \begin{align*}
-u_n=\frac{\Gamma(\bold{b})}{\Gamma(\hat{\bold{a}}_p)} \sum_{k+j=n}{A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)}\frac{\Gamma (-\sigma-k)}{\Gamma (a_p)} \frac{(\sigma+a_p+k)_j}{j!}
+u_n=\frac{\Gamma(\bold{b})}{\Gamma(\hat{\bold{a}}_p)} \sum_{k+j=n}{A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)}\frac{\Gamma (-\sigma-k)}{\Gamma (a_p)} \frac{(\sigma+a_p+k)_j}{j!}\text{.}
 \end{align*}
-We also have from integral powers of $z$ the formula 
+Equating integral powers of $z$ gives 
 \begin{align*}
-\sum_{n=0}^\infty v_nz^n=\sum_{n=0}^{m-1}{\frac{(\bold{a})_n}{(\bold{b})_n} \frac{(1-z)^n}{n!}}+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} \sum_{\ell=0}^\infty\frac{(-m)_\ell}{\ell!}z^\ell \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{1}{(\sigma+k) \Gamma
-	\left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(1-\sigma-k)_j} z^j.
+\sum_{n=0}^\infty v_nz^n=\sum_{n=0}^{m-1}{\frac{(\bold{a})_n}{(\bold{b})_n} \frac{(1-z)^n}{n!}}+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} \sum_{\ell=0}^\infty\frac{(-m)_\ell}{\ell!}z^\ell \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{-1}{\Gamma
+	\left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(-\sigma-k)_j} z^j\text{,}
 \end{align*}
-Taking a large arbitrary $m$ gives
+or, for arbitrary $m$,
 \begin{align*}
-v_i - [z^i] \sum_{n=0}^{m-1}{\frac{(\bold{a})_n}{(\bold{b})_n} \frac{(1-z)^n}{n!}} &= \sum_{\ell +j=i}\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)}\frac{(-m)_\ell}{\ell!}\sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{1}{(\sigma+k) \Gamma
-	\left(\sigma+a_p+m+k\right)}\frac{(a_p+m)_j}{(1-\sigma-k)_j}\\
+v_i - [z^i] \sum_{n=0}^{m-1}{\frac{(\bold{a})_n}{(\bold{b})_n} \frac{(1-z)^n}{n!}} &= \sum_{\ell +j=i}\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)}\frac{(-m)_\ell}{\ell!}\sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{-1}{\Gamma
+	\left(\sigma+a_p+m+k\right)}\frac{(a_p+m)_j}{(-\sigma-k)_j}\\
 &= \frac{\Gamma(\bold{b}) (a_p)_m}{\Gamma(\hat{\bold{a}}_p) \Gamma\left(\sigma+a_p+m\right)} \sum_{j=0}^{i}\frac{(a_p+m)_j (-m)_{i-j}}{(i-j)!}\sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{-1}{\left(\sigma+a_p+m\right)_k (-\sigma-k)_{j+1}}
 \end{align*}
 This formula for the $v_i$ is as effective as the series in the previous section.
 
 \subsubsection{hybrid approach for $\sigma \in \mathbb{Z}$}
-Too messy.
+The case of integral $\sigma$ in \eqref{2f1nearone} is too messy.
 
 
 
@@ -360,29 +363,31 @@ To avoid either a catastrophic linear loss of precision when the $a_i$ are appro
 \end{align*}
 
 \subsection{putting everything together}
-In section discusses the reliable evaluation of the solution and its derivatives, which can be writen as
+This section discusses the reliable evaluation of the solution and its derivatives $f(z), f'(z), \dots, f^{(\delta-1)}(z)$, which can be writen as
 \begin{equation*}
-f^{(d)}(z) = f_{[0,N_0)}^{(d)}(z) + f_{[N_0,N_1)}^{(d)}(z) + f_{[N_1,\infty)}^{(d)}(z)
+f^{(d)}(z) = f_{[0,N_0)}^{(d)}(z) + f_{[N_0,N)}^{(d)}(z) + f_{[N,\infty)}^{(d)}(z)
 \end{equation*}
-First observe that if
+where 
 \begin{equation*}
-f(z) = \sum_{i,j} u_{i,j} z^{\lambda+i} \log(z)^j/j!
+f_{[N_0,N_1)}(z) = \sum_{N_0 \le i < N_1,j} u_{i,j} z^{\lambda+i} \log(z)^j/j!
 \end{equation*}
-then
-\begin{equation*}
-f'(z) = \sum_{i,j} \left((\lambda+i)u_{i,j} + u_{i,j+1}\right) z^{\lambda-1+i} \log(z)^j/j!
-\end{equation*}
-The the quantities $z^{\lambda+i} \log(z)^j/j!$ for integers $i$ and $j$ need to be evaluated reliably. This is a problem particularly when $z$ is close to zero (or a ball containing zero).
+The the quantities $z^{\lambda+i} \log(z)^j/j!$ for integers $i$ and $j$ need to be evaluated reliably. This is a problem when $z$ is zero or a ball containing zero.
 
 The first block $f_{[0,N_0)}^{(d)}(z)$ includes those ``problematic'' terms $u_{i,j} z^{\lambda+i} \log(z)^j/j!$ where $\lambda+i$ is a root of $Q_0(\theta)$. These terms are problematic because the denominators of \eqref{unrec} could vanish, thus they should be dealt with separately. For each of these terms we just evaluate $z^{\lambda+i} \log(z)^j/j!$ directly and take care when $z$ contains zero, where the sign of $\Re(\lambda+i)$ is relevent.
 
 The next block also requires care with respect to the evaluation of $\log(z)$. What we actually get out of the previous section is a reliable evaluation of
 \begin{equation*}
-z^{d - N_0 - \lambda} f_{[N_0,N_1)}^{(d)}(z) = \sum_{j=0}^{\tau-1} e_j \Lambda^{\tau-1-j} \in \mathbb{C}[\Lambda]\text{,}
+z^{d - N_0 - \lambda} f_{[N_0,N)}^{(d)}(z) = \sum_{j=0}^{\tau-1} e_j \Lambda^{\tau-1-j} \in \mathbb{C}[\Lambda]\text{,}
 \end{equation*}
-that is, we still have to evaluate $\sum_{j=0}^{\tau-1} e_j z^{\lambda+N_0-d}\log(z)^j/j!$ as reliably as possible. For this, it is helpful if $\Re(\lambda+N_0-d) > 0$ which is why it is a good ideal to choose a $N_0 > d$.
+that is, we still have to evaluate $\sum_{j=0}^{\tau-1} e_j z^{\lambda+N_0-d}\log(z)^j/j!$ as reliably as possible. For this, it is helpful if $\Re(\lambda+N_0-d) > 0$ which is why it is a good ideal to at least choose an $N_0 \ge \delta$.
 
-For the final block, the majorant method produces a power series $\hat{B}(z) = \sum_{i=0}^{\infty} b_i z^i \in \mathbb{R}_{\ge 0}[z]$ with $|u_{N_1 + i,j}| < b_i$ for all $j$. We need to turn this into a bound on $f_{[N_1,\infty)}^{(d)}(z)$. This requires care as well. TODO.
+For the final block, the majorant method produces a power series $\hat{B}(z) = \sum_{i=0}^{\infty} b_i z^i \in \mathbb{R}_{\ge 0}[z]$ with $z^N \hat{B}(z)$ majorizing the tail $\sum_{i = N}^{\infty} u_{i,j} z^i$ for all $j<\tau$. Thus to bound $|f(z)| + |f'(z)| \epsilon + \cdots + |f^{\delta-1}(z)|/(\delta-1)! \epsilon^{\delta-1}$, we need to calculate, while working in $\epsilon$ modulo $\epsilon^{\delta}$, a majorant (in $\epsilon$) of $(z+\epsilon)^{\lambda+N} \log(z+\epsilon)^j/j!$ for each $j<\tau$, add these up, and multiply the sum by $B(z+\epsilon)$. Since the derivatives of $z^\delta \log(z)^{j}$ up to and including order $\delta-1$ are continuous at $z=0$, it suffices to steal $z^\delta$ from the $z^{\lambda+N}$. If the deficit $z^{\lambda+N-\delta}$ is not continuous at $z=0$, the situation is hopeless anyways.
+For fixed $\delta$ we have
+\begin{equation*}
+(z+\epsilon)^\delta \log(z+\epsilon)^{j} = \sum_{k=0}^{\delta-1} c_{j,k}(\log(z)) z^{\delta-k} \epsilon^{k} + O(\epsilon^\delta)
+\end{equation*}
+for certain polynomials $c_{j,k}$ of degree $j$ satisfying $c_{j+1,k} = \log(z) c_{j,k} + \sum_{\ell=1}^{k} (-1)^{\ell-1}c_{k-\ell}/\ell$.
+
 
 
 \end{document}
