@@ -19,6 +19,8 @@
 
 \newcommand{\F}[5] {{}_{#1}F_{#2} \left( \begin{array}{c} #3 \\ #4 \end{array} \Big| #5  \right)}
 
+\newcommand{\ARG}[2] {\left( \begin{array}{c} #1 \\ #2 \end{array} \right)}
+
 \author{Junxian Li \& Daniel Schultz}
 \title{Calculating $\, _{p}F_{q}$}
 \date{}
@@ -82,7 +84,7 @@ It is also possible to use Pad\'e approximants here, but do we have useful error
 This is the most interesting case as the function can fail to be defined at one. The existence of $F(1)$ is determinded by $\Re(\sigma)> 0$. If $\sigma$ is not an integer we have
 \begin{equation}
 \label{nearone}
-F(1-z) = \sum_{n=0}^{\infty} u_n z^{\sigma+n} + \sum_{n=0}^{\infty} v_n z^n
+\F{p}{p-1}{\mathbf{a}}{\mathbf{b}}{1-z} = \sum_{n=0}^{\infty} u_n \left(\begin{array}{c} \mathbf{a}\\\mathbf{b}\end{array} \right) z^{\sigma+n} + \sum_{n=0}^{\infty} v_n \left(\begin{array}{c} \mathbf{a}\\\mathbf{b}\end{array} \right) z^n
 \end{equation}
 with the $u_1,u_2,\dots$ determined from recurrences by $u_0 = \Gamma(-\sigma)\Gamma(\bold{b})/\Gamma(\bold{a})$ and the $v_{p-1}, v_p, \dots$ are determined from recurrences by $v_0, \dots, v_{p-2}$. Thus the difficulty is computing these $v_0, \dots, v_{p-2}$.
 
@@ -90,7 +92,7 @@ If $\sigma$ is an integer, then at most one $\log(z)$ enters into the series.
 \subsubsection{generic approach}
 We simply evaluate Equation \eqref{nearone} and its derivatives up to and including order $p-1$ at $z=1/4$ to solve for the $u_0,v_0,\dots,v_{p-2}$. The explicit formula for $u_0$ is surprisingly useless in this approach.
 
-\subsubsection{Buehring [not implemented but this section is correct]}
+\subsubsection{Buehring}
 Here we sum the first $m$ terms of Equation \eqref{Fdef} and use a formula derived by Buehring to sum the remaining terms. Since we will generically be dealing with logarithmically convergent series (when $z=1$) in both sums, it is important to balance the choice of $m$ between the two to ensure a sub-exponential algorithm.
 We have (Equations (2.7) and (2.9) in ``analytic continuation of the generalized hypergeoemtric sereis near unit argument with emphasis on the zero-balanced series'' by Buehring and Srivastava)
 \begin{align}
@@ -99,7 +101,7 @@ We have (Equations (2.7) and (2.9) in ``analytic continuation of the generalized
 \label{buehring}
 &=\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} z^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \,{} _2\tilde{F}_1\left( \begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| z\right)
 \end{align}
-where the $A_k(\hat{\bold{a}}_b; \bold{b})$ are independent of $m$ and are polynomials in $a_1,\dots,a_{p-1},b_1,\dots,b_{p-1}$. They can be defined in the base case $p=2$ as
+where the $A_k(\hat{\bold{a}}_p; \bold{b})$ are independent of $m$ and are polynomials in $a_1,\dots,a_{p-1},b_1,\dots,b_{p-1}$. They can be defined in the base case $p=2$ as
 \begin{equation*}
 A_k\left(\begin{array}{c} a_1 \\ b_1 \end{array}\right) = \frac{(1-a_1)_k(b_1-a_1)_k}{k!}
 \end{equation*}
@@ -137,16 +139,17 @@ The necessary coefficients $u_0$ (respectively $v_0,\dots,v_{p-2}$) in \eqref{ne
 \end{aligned}
 \end{equation}
 The basic idea is that
-\begin{equation*}
+\begin{equation}
+\label{viapprox}
 \sum_{n=0}^{m-1} \frac{(\bold a)_n}{(\bold b)_n}\frac{(1-z)^n}{n!} \approx v_0 + v_1 z + v_2 z^2 + \cdots\text{.}
-\end{equation*}
+\end{equation}
 This is no help in evaluating the $u_n$, but those can be found easily. We have
 
 \begin{align*}
 F(1-z)=\sum_{n=0}^{m-1} \frac{(\bold a)_n}{(\bold b)_n}\frac{(1-z)^n}{n!}&+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} (1-z)^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)}\,{} _2\tilde{F}_1\left( \begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| 1-z\right)\\
 =\sum_{n=0}^{m-1} \frac{(\bold a)_n}{(\bold b)_n}\frac{(1-z)^n}{n!}&+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} (1-z)^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)}\frac{\Gamma (-\sigma-k)}{\Gamma (a_p+m)} \sum_{j=0}^{\infty} \frac{(\sigma+a_p+m+k)_j}{j!}z^{\sigma+k+j}\\
 &+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} (1-z)^m \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{-1}{\Gamma
-	\left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(-\sigma-k)_j} z^j.
+	\left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(-\sigma-k)_{j+1}} z^j.
 \end{align*}
 Taking $m=0$ and equating non-integral powers of $z$ gives
 \begin{align*}
@@ -159,18 +162,65 @@ u_n=\frac{\Gamma(\bold{b})}{\Gamma(\hat{\bold{a}}_p)} \sum_{k+j=n}{A_k\left(\beg
 Equating integral powers of $z$ gives 
 \begin{align*}
 \sum_{n=0}^\infty v_nz^n=\sum_{n=0}^{m-1}{\frac{(\bold{a})_n}{(\bold{b})_n} \frac{(1-z)^n}{n!}}+\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} \sum_{\ell=0}^\infty\frac{(-m)_\ell}{\ell!}z^\ell \sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{-1}{\Gamma
-	\left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(-\sigma-k)_j} z^j\text{,}
+	\left(\sigma+a_p+m+k\right)} \sum_{j=0}^{\infty} \frac{(a_p+m)_j}{(-\sigma-k)_{j+1}} z^j\text{,}
 \end{align*}
 or, for arbitrary $m$,
 \begin{align*}
 v_i - [z^i] \sum_{n=0}^{m-1}{\frac{(\bold{a})_n}{(\bold{b})_n} \frac{(1-z)^n}{n!}} &= \sum_{\ell +j=i}\frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)}\frac{(-m)_\ell}{\ell!}\sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{-1}{\Gamma
-	\left(\sigma+a_p+m+k\right)}\frac{(a_p+m)_j}{(-\sigma-k)_j}\\
+	\left(\sigma+a_p+m+k\right)}\frac{(a_p+m)_j}{(-\sigma-k)_{j+1}}\\
 &= \frac{\Gamma(\bold{b}) (a_p)_m}{\Gamma(\hat{\bold{a}}_p) \Gamma\left(\sigma+a_p+m\right)} \sum_{j=0}^{i}\frac{(a_p+m)_j (-m)_{i-j}}{(i-j)!}\sum_{k=0}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \frac{-1}{\left(\sigma+a_p+m\right)_k (-\sigma-k)_{j+1}}
 \end{align*}
-This formula for the $v_i$ is as effective as the series in the previous section.
+This formula for the $v_i$ is as effective as the series in the previous section. Another formula for the $v_i$ follows by noting that both sides of \eqref{nearone} can be differentiated, which yields
+\begin{equation*}
+i! (-1)^i v_i \ARG{\mathbf{a}}{\mathbf{b}} = \frac{(\mathbf{a})_i}{(\mathbf{b})_i} v_0 \ARG{\mathbf{a}+i}{\mathbf{b}+i}\text{.}
+\end{equation*}
+Combining this with the above formula for $v_0$ gives
+\begin{align*}
+i! (-1)^i v_i \ARG{\mathbf{a}}{\mathbf{b}} &= \frac{(\mathbf{a})_i}{(\mathbf{b})_i} \left(  \sum_{n=0}^{m-1}{\frac{(\mathbf{a}+i)_n}{(\mathbf{b}+i)_n} \frac{1}{n!}} + \frac{\Gamma(\mathbf{b}+i) \Gamma(a_p+i+m)}{\Gamma(\mathbf{a}+i) \Gamma(\sigma+a_p+m)} \sum_{k=0}^{\infty} A_k \ARG{\hat{\mathbf{a}}_p+i}{\mathbf{b}+i} \frac{1}{(\sigma-i+k) (\sigma+a_p+m)_k} \right)\\
+&=\sum_{n=0}^{m-1}{\frac{(\mathbf{a})_{n+i}}{(\mathbf{b})_{n+i}} \frac{1}{n!}} + \frac{\Gamma(\mathbf{b}) \Gamma(a_p+i+m)}{\Gamma(\mathbf{a}) \Gamma(\sigma+a_p+m)} \sum_{k=0}^{\infty} A_k \ARG{\hat{\mathbf{a}}_p+i}{\mathbf{b}+i} \frac{1}{(\sigma-i+k) (\sigma+a_p+m)_k}\text{.}
+\end{align*}
+Finally, replacing $m$ by $m-i$ gives the succinct formula
+\begin{equation}
+\label{visuc}
+\begin{aligned}
+i! (-1)^i v_i \ARG{\mathbf{a}}{\mathbf{b}} &= \quad\frac{\Gamma(\mathbf{b}) \Gamma(a_p+m)}{\Gamma(\mathbf{a}) \Gamma(\sigma-i+a_p+m)} \sum_{k=0}^{\infty} A_k \ARG{\hat{\mathbf{a}}_p+i}{\mathbf{b}+i} \frac{1}{(\sigma-i+k) (\sigma-i+a_p+m)_k}\\
+&\quad +\frac{\partial^i}{\partial z^i} \Big|_{z=1} \sum_{n=0}^{m-1}{\frac{(\mathbf{a})_{n}}{(\mathbf{b})_{n}} \frac{z^n}{n!}}\text{.}
+\end{aligned}
+\end{equation}
+When $\Re(\sigma) \le i$ so that the coefficient of $z^i$ on the left hand side of \eqref{viapprox} diverges as $m$ tends to $\infty$, there is cancelation between the two sums on the right hand side of \eqref{visuc}. Thus, it should not be used in this case.
 
 \subsubsection{hybrid approach for $\sigma \in \mathbb{Z}$}
-The case of integral $\sigma$ in \eqref{2f1nearone} is too messy.
+The case of integral $\sigma$ in \eqref{2f1nearone} is in general too messy. Since the final formula is not going to work well for $\sigma < 0$ anyways, let $\sigma$ be a nonnegative integer. In this case \eqref{nearone} takes the shape
+\begin{equation*}
+\F{p}{p-1}{\mathbf{a}}{\mathbf{b}}{1-z} = \sum_{n=0}^{\infty} w_n \left(\begin{array}{c} \mathbf{a}\\\mathbf{b}\end{array} \right) z^{\sigma+n} \log(z) + \sum_{n=0}^{\infty} r_n \left(\begin{array}{c} \mathbf{a}\\\mathbf{b}\end{array} \right) z^n\text{,}
+\end{equation*}
+and \eqref{2f1nearone} becomes
+\begin{equation*}
+\begin{aligned}
+{}_2\tilde{F}_1\left(\begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| 1-z\right) &= \sum_{j=0}^{\sigma} \frac{(-1)^j z^j}{\Gamma(a_p+m)} \begin{cases} \frac{\Gamma (-j+k+\sigma ) \Gamma
+   \left(j+m+a_p\right)}{\Gamma (k+\sigma +1) \Gamma
+   \left(k+m+\sigma +a_p\right)} \text{,} \quad j < \sigma + k \\
+ \frac{-\psi ^{(0)}\left(m+\sigma+a_p\right)-\log(z)-\gamma }{\sigma !} \text{,} \quad j = \sigma+k \end{cases}\\
+&+O(z^{\sigma+1})\text{.}
+\end{aligned}
+\end{equation*}
+Thus the coefficients of $z^0,z^1,\dots,z^{\sigma}$ in $F(1-z)$ as polynomials in $\log(z)$ are equal to those of
+\begin{equation*}
+\begin{gathered}
+\sum_{n=0}^{m-1}\frac{(\mathbf{a})_n}{(\mathbf{b})_n} \frac{(1-z)^n}{n!}+ \frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} (1-z)^m \left(\,{} _2\tilde{F}_1\left( \begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+0 \end{array} \Big| 1-z\right) \right.\\
++ \left. \sum_{k=1}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \,{} _2\tilde{F}_1\left( \begin{array}{c} 1,a_p+m \\ 1+\sigma+a_p+m+k \end{array} \Big| 1-z\right) \right)
+\end{gathered}
+\end{equation*}
+or
+\begin{equation*}
+\begin{gathered}
+\sum_{n=0}^{m-1}\frac{(\mathbf{a})_n}{(\mathbf{b})_n} \frac{(1-z)^n}{n!}+ \frac{\Gamma(\bold{b})(a_p)_m}{\Gamma(\hat{\bold{a}}_p)} (1-z)^m \left(\sum_{j=0}^{\sigma-1} z^j\frac{-(m+a_p)_j}{(-\sigma-0)_{j+1} \Gamma
+   \left(0+m+\sigma +a_p\right)} \right.\\
++ \left. \frac{(-1)^\sigma z^\sigma}{\Gamma(a_p+m)} \frac{-\psi \left(m+\sigma+a_p\right)-\gamma-\log(z) }{\sigma !} \right.\\
++ \left. \sum_{k=1}^{\infty} {A_k\left(\begin{array}{c} \hat{\bold{a}}_p \\ \bold{b} \end{array}\right)} \sum_{j=0}^{\sigma} z^j\frac{-(m+a_p)_j}{(-\sigma-k)_{j+1} \Gamma
+   \left(k+m+\sigma +a_p\right)} \right)
+\end{gathered}
+\end{equation*}
 
 
 

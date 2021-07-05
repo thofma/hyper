@@ -13,6 +13,24 @@ end
 
 #### five types: arb, acb, arb_poly, acb_poly, and acb_mat #####################
 
+mutable struct nmag
+  rad_exp::Int # fmpz
+  rad_man::UInt
+
+  function nmag()
+    z = new()
+    ccall((:mag_init, libarb), Nothing,
+          (Ref{nmag},),
+          z)
+    finalizer(_mag_clear_fxn, z)
+    return z
+  end
+end
+
+function _mag_clear_fxn(a::nmag)
+  ccall((:mag_clear, libarb), Nothing, (Ref{nmag},), a)
+end
+
 mutable struct narb
   mid_exp::Int # fmpz
   mid_size::UInt # mp_size_t
@@ -281,7 +299,7 @@ end
 
 function native_string(x::narb)
   d = precision(x)
-  d = clamp(d, 10, 100)
+  d = clamp(d, 10, 200)
   d = trunc(Int, d*0.30103)
   cstr = ccall((:arb_get_str, Nemo.libarb), Ptr{UInt8},
          (Ref{narb}, Int, UInt),
@@ -965,14 +983,22 @@ end
 
 
 
-function add!(z::nacb, x::nacb, y::Int, p::Int)
+function add!(z::nacb, a::nacb, b::Int, p::Int)
   ccall((:acb_add_si, libarb), Nothing,
         (Ref{nacb}, Ref{nacb}, Int, Int),
-        z, x, y, p)
+        z, a, b, p)
   return z
 end
 
-function add(a::nacb, b::nacb, p::Int)
+function add!(z::nacb, a::nacb, b::narb, p::Int)
+  ccall((:acb_add_arb, libarb), Nothing,
+        (Ref{nacb}, Ref{nacb}, Ref{narb}, Int),
+        z, a, b, p)
+  return z
+end
+
+
+function add(a::nacb, b::Union{narb, nacb}, p::Int)
   return add!(nacb(), a, b, p)
 end
 
@@ -1022,8 +1048,19 @@ function add!(z::narb_poly, a::narb_poly, b::Int, p::Int)
   return z
 end
 
+function add!(z::nacb_poly, a::nacb_poly, b::Int, p::Int)
+  ccall((:acb_poly_add_si, libarb), Nothing,
+        (Ref{nacb_poly}, Ref{nacb_poly}, Int, Int),
+        z, a, b, p)
+  return z
+end
+
 function add(a::narb_poly, b::Int, p::Int)
   return add!(narb_poly(), a, b, p)
+end
+
+function add(a::nacb_poly, b::Int, p::Int)
+  return add!(nacb_poly(), a, b, p)
 end
 
 function add(b::Int, a::narb_poly, p::Int)
@@ -1037,6 +1074,13 @@ end
 
 function sub(a::Int, b::narb_poly, p::Int)
   return sub!(narb_poly(), a, b, p)
+end
+
+function neg!(z::narb, a::narb)
+  ccall((:arb_neg, libarb), Nothing,
+        (Ref{narb}, Ref{narb}),
+        z, a)
+  return z
 end
 
 function neg!(z::nacb, a::nacb)
@@ -1419,6 +1463,51 @@ function one!(z::fmpz)
         z, 1)
 end
 
+
+function magnitude(a::nacb)
+  z = nmag()
+  ccall((:acb_get_mag, libarb), Nothing,
+        (Ref{nmag}, Ref{nacb}),
+        z, a)
+  return z
+end
+
+function isspecial(a::nmag)
+  return 0 != ccall((:mag_is_special, libarb), Cint,
+                    (Ref{nmag},),
+                    a)
+end
+
+function iszero(a::nmag)
+  return 0 != ccall((:mag_is_zero, libarb), Cint,
+                    (Ref{nmag},),
+                    a)
+end
+
+function Base.min(a::nmag, b::nmag)
+  t = ccall((:mag_cmp, libarb), Cint,
+            (Ref{nmag}, Ref{nmag}),
+            a, b)
+  return t < 0 ? a : b
+end
+
+function Base.div(a::nmag, b::nmag)
+  z = nmag()
+  ccall((:mag_div, libarb), Nothing,
+        (Ref{nmag}, Ref{nmag}, Ref{nmag}),
+        z, a, b)
+  return z
+end
+
+function Base.exponent(a::nmag)
+  z = fmpz()
+  # dirty
+  ccall((:fmpz_set, :libflint), Nothing,
+        (Ref{fmpz}, Ref{nmag}),
+        z, a)
+  return z
+end
+
 #### special functions required for field F with elem_type T ###################
 
 # integer check
@@ -1444,6 +1533,14 @@ function nacb(x::fmpq, p::Int)
   ccall((:acb_set_fmpq, libarb), Nothing,
         (Ref{nacb}, Ref{fmpq}, Int),
         z, x, p)
+  return z
+end
+
+function sin_pi(a::fmpq, p::Int)
+  z = narb()
+  ccall((:arb_sin_pi_fmpq, libarb), Nothing,
+        (Ref{narb}, Ref{fmpq}, Int),
+        z, a, p)
   return z
 end
 
@@ -1578,7 +1675,7 @@ function zpowlogpow(Z::zBranchInfo, i::Int, j::Int, Φ::Int)
   if isfinite(Z.logz)
     return div(mul(zpow(Z, i, Φ), pow(Z.logz, j, Φ), Φ), factorial(j, Φ), Φ)
   else
-    return fancypow_at_0(magnitude(Z.z, Φ), Z.λ+i, j, Φ)
+    return fancypow_at_0(abs_upper(Z.z, Φ), Z.λ+i, j, Φ)
   end
 end
 
@@ -1604,7 +1701,7 @@ function zlogzpow(Z::zBranchInfo, j::Int, Φ::Int)
     if isfinite(Z.logz)
       res = mul(Z.z, pow(Z.logz, i, Φ), Φ)
     else
-      res = fancypow_at_0(magnitude(Z.z, Φ), fmpq(1), j, Φ)
+      res = fancypow_at_0(abs_upper(Z.z, Φ), fmpq(1), j, Φ)
     end
     push!(Z.zlogzpow, res)
   end
@@ -1699,6 +1796,10 @@ function equ_sub!(c1::Vector, c2::Vector)
   return c1
 end
 
+function mul!(z::Matrix{fmpq_poly}, a::fmpq)
+  
+end
+
 function mul!(z::Matrix{nacb_poly}, a::nacb, Φ::Int)
   for i in z
     mul!(i, i, a, Φ::Int)
@@ -1739,41 +1840,42 @@ end
 # let f(z) = Σ_{N0≤i<N1, 0≤j<τ} u[i,j]*z^(λ+i)*log(z)^j/j!
 # return [z^(d-N0-λ)*f^(d)(z)]_{0≤d<δ} as a δxs matrix of acb_poly in Λ
 function sum_bs_diff(
-  eq::Matrix,   # size sxτ
+  eq::Matrix{PT}, den::PT,  # size sxτ
   z::nacb,
   λ::T,
   δ::Int,
   N1::Int, N0::Int,
-  Φ::Int) where T
+  Φ::Int) where {PT, T}
 
-  return sum_bs_diff_rec(eq, z, λ, δ, N1, N0, Φ)
+  return sum_bs_diff_rec(eq, den, z, λ, δ, N1, N0, Φ)
 end
 
 function sum_bs_diff_continue(
-  eq::Matrix,   # size sxτ
+  eq::Matrix{PT}, den::PT,  # size sxτ
   z::nacb,
   λ::T,
   δ::Int,
   hi::Int, mid::Int, lo::Int,
   S0::Matrix{nacb_poly}, M0::Matrix{nacb_poly},
-  Φ::Int) where T
+  Φ::Int) where {PT, T}
 
   (s, τ) = size(eq)
   S = [nacb_poly() for i in 1:δ, j in 1:s]
   M = [nacb_poly() for i in 1:s, j in 1:s]
-  (S1, M1) = sum_bs_diff_rec(eq, z, λ, δ, hi, mid, Φ)
-  add!(S, S0, mul!(mul(S1, M0, τ, Φ), pow(z, mid-lo, Φ), Φ) , Φ)
+  (S1, M1) = sum_bs_diff_rec(eq, den, z, λ, δ, hi, mid, Φ)
+  Δ = mul!(mul(S1, M0, τ, Φ), pow(z, mid-lo, Φ), Φ)
+  add!(S, S0, Δ, Φ)
   mul!(M, M1, M0, τ, Φ)
-  return (S, M)
+  return (S, M, Δ)
 end
 
 function sum_bs_diff_rec(
-  eq::Matrix,   # size sxτ
+  eq::Matrix{PT}, den::PT,  # size sxτ
   z::nacb,
   λ::T,
   δ::Int,
   hi::Int, lo::Int,
-  Φ::Int) where T
+  Φ::Int) where {PT, T}
 
   @assert hi > lo
 
@@ -1782,8 +1884,9 @@ function sum_bs_diff_rec(
   M = [nacb_poly(i-1==j ? 1 : 0) for i in 1:s, j in 1:s] # companion diagonal
 
   if hi<lo+2
+    deneval = evaluate(den,lo)
     for i in 0:s-1, j in 0:τ-1
-      e = evaluate(numerator(eq[1+i,1+j]),lo)//evaluate(denominator(eq[1+i,1+j]),lo)
+      e = evaluate(eq[1+i,1+j],lo)//deneval
       setcoeff!(M[1,1+i], j, nacb(e, Φ))
     end
     ff = one(nacb_poly) # (Λ+n-0)*(Λ+n-1)*...*(Λ+n-(i-1))
@@ -1798,8 +1901,8 @@ function sum_bs_diff_rec(
     end
   else
     mid = cld(hi+lo,2)
-    (S0, M0) = sum_bs_diff_rec(eq, z, λ, δ, mid, lo, Φ)
-    (S1, M1) = sum_bs_diff_rec(eq, z, λ, δ, hi, mid, Φ)
+    (S0, M0) = sum_bs_diff_rec(eq, den, z, λ, δ, mid, lo, Φ)
+    (S1, M1) = sum_bs_diff_rec(eq, den, z, λ, δ, hi, mid, Φ)
     add!(S, S0, mul!(mul(S1, M0, τ, Φ), pow(z, mid-lo, Φ), Φ) , Φ)
     mul!(M, M1, M0, τ, Φ)
   end
@@ -1969,18 +2072,17 @@ end
  +a2(n)*b1(n)*b1(n-1)*b0(n-2)*C[n-2]
  -a3(n)*b1(n)*b1(n-1)*b1(n-2)*C[n-3] == 0
 =#
-function hadamard_product(A::Vector, B::Vector)
-  @assert length(B) == 2
-  Fθ = parent(B[1])
+function hadamard_product1(A::Vector{S}, B0::S, B1::S) where S
+  Fθ = parent(B0)
   θ = gen(Fθ)
-  Ad = length(A) - 1
+  Ad = length(A)-1
   C = elem_type(Fθ)[]
-  t = prod(evaluate(B[1+0], θ-i+1) for i in 1:Ad)
+  t = prod(evaluate(B0, θ-i+1) for i in 1:Ad)
   push!(C, A[1+0]*t)
   g = C[end]
   for i in 1:Ad
-    t = divexact(t, evaluate(B[1+0], θ-i+1))
-    t = -t*evaluate(B[1+1], θ-i+1)
+    t = divexact(t, evaluate(B0, θ-i+1))
+    t = -t*evaluate(B1, θ-i+1)
     push!(C, A[1+i]*t)
     g = gcd(g, C[end])
   end
@@ -1988,6 +2090,58 @@ function hadamard_product(A::Vector, B::Vector)
     C[1+i] = divexact(C[1+i], g)
   end
   return C
+end
+
+function hadamard_product(A::Vector{S}, B::Vector{S}) where S
+  ra = length(A)-1
+  rb = length(B)-1
+  @assert ra > 0 && rb > 0
+  if rb == 1
+    return hadamard_product1(A, B[1], B[2])
+  elseif ra == 1
+    return hadamard_product1(B, A[1], A[2])
+  end
+  Fθ = parent(B[1])
+  FFθ = FractionField(Fθ)
+  θ = gen(Fθ)
+  rc = ra*rb
+
+  u = elem_type(FFθ)[FFθ(i==j ? 1 : 0) for i in 0:rc, j in 0:ra-1]
+  for i in ra:rc
+    f = [-evaluate(A[1+j], θ+i)//evaluate(A[1], θ+i) for j in 1:ra]
+    for j in 1:ra, k in 1:ra
+      u[1+i,j] += f[k]*u[i+1-k,j]
+    end
+  end
+
+  v = elem_type(FFθ)[FFθ(i==j ? 1 : 0) for i in 0:rc, j in 0:rb-1]
+  for i in rb:rc
+    f = [-evaluate(B[1+j], θ+i)//evaluate(B[1], θ+i) for j in 1:rb]
+    for j in 1:rb, k in 1:rb
+      v[1+i,j] += f[k]*v[i+1-k,j]
+    end
+  end
+
+  M = zero_matrix(FFθ, rc, rc+1)
+  for i in 0:rc
+    for j1 in 0:ra-1, j2 in 0:rb-1
+      M[1+j1*rb+j2,1+i] = u[1+i,1+j1]*v[1+i,1+j2]
+    end
+  end
+
+  (nullity, NS) = nullspace(M)
+  @assert nullity == 1
+
+  c = [(evaluate(numerator(NS[1+i,1]),θ-rc), evaluate(denominator(NS[1+i,1]),θ-rc)) for i in rc:-1:0]
+  cont = zero(Fθ)
+  den = one(Fθ)
+  for ci in c
+    cont = gcd(cont, ci[1])
+    den = lcm(den, ci[2])
+  end
+  c = elem_type(Fθ)[divexact(ci[1], cont)*divexact(den, ci[2]) for ci in c]
+
+  return c
 end
 
 function transpose_vars(Px::Vector, Fθ)
@@ -2025,7 +2179,6 @@ function cauchy_product(Aθ::Vector, Bθ::Vector)
         for i in 0:length(F)]
   end
 
-
   # cancel content while θ is on the right
   c = map(p -> (numerator(p), denominator(p)), F)
   cont = zero(Fx)
@@ -2044,53 +2197,86 @@ function cauchy_product(Aθ::Vector, Bθ::Vector)
   return transpose_vars(Cx, Fθ)
 end
 
-function initial_values(A, v::Vector{T}) where T
+function initial_values(A, v::Vector{T}, len::Int) where T
   iv = v # eh, clobber input
-  while length(iv)<length(A)-1
+  while length(iv)<len
     n = length(iv)
-    push!(iv, -sum(iv[n-i]*evaluate(A[2+i],n) for i in 0:n-1)//evaluate(A[1],n))
+    push!(iv, -sum(iv[n-i]*evaluate(A[2+i],n) for i in 0:min(length(A)-2,n-1))//evaluate(A[1],n))
   end
   return iv
 end
 
+function initial_values(A, v::Vector{T}) where T
+  return initial_values(A, v, length(A)-1)
+end
+
+function hypergeometric_2f1_regularized(a, b, c, x, Φ::Int)
+  A = nacb(a, Φ)
+  B = nacb(b, Φ)
+  C = nacb(c, Φ)
+  X = nacb(x, Φ)
+  z = nacb()
+  ccall((:acb_hypgeom_2f1, libarb), Nothing,
+        (Ref{nacb}, Ref{nacb}, Ref{nacb}, Ref{nacb}, Ref{nacb}, Cint, Int),
+        z, A, B, C, X, 1, Φ)
+  return z
+end
+
+
+#=
+with F[m,k] = 2f1r(1, a+m, 1+σ+a+m+k, z) we already have to use Feq for the
+recursion on k. Outlook not good, but could try using a recursion on m too:
+  {F[m,0], F[m,1]} = 1/(m+a-1)*M.{F[m-1,0], F[m-1,1]}
+where M = {{1, -1-σ}, {(z-1)/(z*(m+σ+a)), 1/z + (-1-σ)/(m+σ+a)}}
+=#
 function funny_hyp(
   a::Vector{T}, b::Vector{T},
   z::T,
   m::Int, # number of terms for plain sum
   N::Int, # number of terms for tail sum
-  prec::Int) where T
+  Φ::Int) where T
 
   σ::T = sum(b) - sum(a)
   q = length(b)
   @assert q>1 && q+1==length(a)
   F = parent(a[end])
   Fθ, θ = PolynomialRing(F, "θ")
-  prec += 20
-  eq = [θ*prod(θ-1+i for i in b), -prod(θ-1+i for i in a)]
-@time  plain = sum_bs(m, eq, [one(F)], prec + 10 + 2*nbits(m))
-  # compute recurrence eq for buehring's coeffs Ak
-  t = 1 - a[1]
-  eq = [θ, -(θ-1+t)*(θ-1+b[1]-a[1])]
-  for i in 2:q
-    t += b[i-1]-a[i]
-    eq = hadamard_product(eq, [(θ-1+t), -one(Fθ)])
-    eq = cauchy_product(eq, [θ, -(θ-1+b[i]-a[i])])
-    eq = hadamard_product(eq, [one(Fθ), -(θ-1+t)])
-  end
-  # at this point eq is for Ak; now multiply it by the 2f1r(z)
+  Φ += 20
+  eq = [θ*prod(θ-1+i for i in b), -z*prod(θ-1+i for i in a)]
+  plain = sum_bs(m, eq, [one(F)], Φ+10+2*nbits(m))
+  Aeq = buehring_equ(a, b, 0, θ)
   if isone(z)
-    eq = hadamard_product(eq, [(θ+σ)*(θ-1+σ+a[end]+m), -(θ-1+σ)])
-    iv = initial_values(eq, [F(1)])
-@time    tail = sum_bs(N, eq, iv, prec + length(eq) + 2*nbits(N))
-    mul!(tail, tail, mul(rgamma(σ+a[end]+m, prec), inv(σ), prec), prec)
+    AFeq = hadamard_product(Aeq, [(θ+σ)*(θ-1+σ+a[end]+m), -(θ-1+σ)])
+    iv = initial_values(AFeq, [F(1)])
+    tail = sum_bs(N, AFeq, iv, Φ+4*length(AFeq)+4*nbits(N))
+    mul!(tail, tail, mul(rgamma(σ+a[end]+m, Φ), inv(σ), Φ), Φ)
   else
-    @assert false
+    Feq = [z*(θ+σ)*(θ-1+σ+a[end]+m), -(θ-1+σ-(1-z)*(2*θ-2+2*σ+a[end]+m)), -Fθ(1-z)]
+    AFeq = hadamard_product(Aeq, Feq)
+    iv = initial_values(Aeq, [F(1)], length(AFeq)-1)
+    zz = convert(Complex{Float64}, nacb(z, 60))
+    Φ2f1 = Φ + min(Φ, trunc(Int, 0.25*m*nbits(m)*abs(1-zz)))
+    # use Feq to build all initial values iv2 for AFeq
+    # calls 2f1r 2 times instead of 2*q times
+    Fk0 = real(hypergeometric_2f1_regularized(F(1), a[end]+m, 1+σ+a[end]+m+0, z, Φ2f1))
+    Fk1 = real(hypergeometric_2f1_regularized(F(1), a[end]+m, 1+σ+a[end]+m+1, z, Φ2f1))
+    iv2 = narb[mul(Fk0, iv[1+0], Φ), mul(Fk1, iv[1+1], Φ)]
+    M = (F(1), F(0), F(0), F(1))
+    for k in 2:length(iv)-1
+      f0 = evaluate(Feq[1+0], k)
+      f1 = -evaluate(Feq[1+1], k)//f0
+      f2 = (1-z)//f0
+      M = (f1*M[1]+f2*M[3], f1*M[2]+f2*M[4], M[1], M[2])
+      Fk = add(mul(Fk1, M[1], Φ), mul(Fk0, M[2], Φ), Φ)
+      push!(iv2, mul(Fk, iv[1+k], Φ))
+    end
+    tail = sum_bs(N, AFeq, iv2, Φ+4*length(AFeq)+4*nbits(N))
   end
-  f = rising_factorial(a[end], m, prec)
+  f = mul(pow(narb(z, Φ), UInt(m), Φ), rising_factorial(a[end], m, Φ), Φ)
   for i in 1:q
-    mul!(f, f, mul(gamma(b[i], prec), rgamma(a[i], prec), prec), prec)
+    mul!(f, f, div(gamma(b[i], Φ), gamma(a[i], Φ), Φ), Φ)
   end
-  return add(plain, mul(f, tail, prec), prec)
+  return add(plain, mul(f, tail, Φ), Φ)
 end
 
 
@@ -2736,7 +2922,7 @@ function majorant_bound_special(
 end
 
 # return upperbound on |a|
-function magnitude(a::nacb, p)
+function abs_upper(a::nacb, p)
   mag = narb()
   t = mag_struct(0, 0)
   ccall((:mag_init, libarb), Nothing,
@@ -2838,7 +3024,7 @@ function tail_bound(Pθ, Px, u, ns, αs, Z::zBranchInfo, δ, N, τ, ν, Φ)
     return Er
   end
 
-  zmag = magnitude(Z.z, Φ)
+  zmag = abs_upper(Z.z, Φ)
 
   if (k1 > 0 || k2 > 0) && !isnegative(sub(zmag, 1, Φ))
     # don't know if the series converges
@@ -2984,7 +3170,7 @@ function u_derivative!(uN::Vector{Vector{T}}, fac::T, τ::Int, ν::Int) where T
   end
 end
 
-function eval_basis_old(
+function eval_basis_forward(
   Pθ::Vector{S}, Px::Vector{S},
   Z::zBranchInfo{T},
   ns::Vector{fmpz},
@@ -3066,93 +3252,7 @@ function eval_basis_old(
     end
   end
 
-  Er = tail_bound(Pθ, Px, u, ns, αs, Z, δ, N, τ, ν, p)
-  for d in 0:δ-1, l in 1:ν
-    t = M[1+d,l]
-    er = mul(coeff(Er[l], d), factorial(d, p), p)
-    add_error!(t, er)
-    M[1+d,l] = t
-  end
-
-  return M
-end
-
-
-function eval_basis_old_check(
-  Pθ::Vector{S}, Px::Vector{S},
-  Z::zBranchInfo{T},
-  ns::Vector{fmpz},
-  αs::Vector{T},
-  δ::Int,
-  p::Int,
-  Nterms::Int) where {S, T}
-
-  p += 20
-
-  ν = length(ns)    # number of initial conditions
-  τ = 0             # strict bound on the power of log(z) thus far
-  maxN = 10+20*p    # max number of terms to sum
-
-  @assert length(ns) > 0
-  @assert ns[1] == 0
-
-  s = length(Pθ) - 1
-  @assert s > 0
-
-  Fθ = parent(Pθ[1])
-  θ = gen(Fθ)
-  F = base_ring(Fθ)
-
-  # u is an array of the last s solutions
-  # each solution is an array of coefficients of log^k(z)/k!  0 <= k < τ
-  # each coefficient is an array of ν elements of F
-  u = [Vector{T}[] for i in 1:s]
-
-  # M is the matrix answer
-  M = nacb_mat(δ, ν)
-
-  # the ns will be consumed as we sum past them
-  ns = deepcopy(ns)
-  iv = [[i == j ? one(F) : zero(F) for i in 1:ν] for j in 1:ν]
-
-  t = nacb()
-
-  N = 0
-
-  while true
-    may_stop = isempty(ns) #|| N+s < ns[1]
-    if N > maxN
-      error("internal error: parameters too large")
-    end
-
-    (uN, τ) = next_u_coeffs!(u, τ, Pθ, Z.λ, ns, iv, N, ν)
-
-    # add un*z^N to sum
-    uN = deepcopy(uN)
-    for d in 0:δ-1
-      d == 0 || u_derivative!(uN, Z.λ+(N-d+1), τ, ν)
-      for l in 1:ν
-        zero!(t)
-        for j in 0:τ-1
-          if !iszero(uN[1+j][l])
-            add!(t, t, mul(zpowlogpow(Z, N-d, j, p), uN[1+j][l], p), p)
-          end
-        end
-        add!(t, t, M[1+d,l], p)
-        M[1+d,l] = t
-      end
-    end
-
-    N += 1
-
-    if !may_stop
-      continue
-    end
-
-    if N > Nterms
-      break
-    end
-  end
+#println("forward used $N terms")
 
   Er = tail_bound(Pθ, Px, u, ns, αs, Z, δ, N, τ, ν, p)
   for d in 0:δ-1, l in 1:ν
@@ -3166,8 +3266,45 @@ function eval_basis_old_check(
 end
 
 
+function overlap_dist(a::Matrix{nacb_poly}, Δ::Matrix{nacb_poly}, b::Matrix{nacb_poly}, τ::Int, Φ::Int)
+  (r, c) = size(a)
+  @assert (r, c) == size(Δ) == size(b)
+  dist = 0
+  for i in 1:r, j in 1:c
+    dist = max(dist, overlap_dist(a[i,j], Δ[i,j], b[i,j], τ, Φ))
+  end
+  return dist
+end
 
-function eval_basis_new(
+function overlap_dist(a::nacb_poly, Δ::nacb_poly, b::nacb_poly, τ::Int, Φ::Int)
+  dist = 0
+  for i in 0:τ-1
+    dist = max(dist, overlap_dist(coeff(a, i), coeff(Δ, i), coeff(b, i), Φ))
+  end
+  return dist
+end
+
+function overlap_dist(a::nacb, Δ::nacb, b::nacb, Φ::Int)
+  if overlaps(a, b)
+    return 0
+  end
+  q = div(magnitude(Δ), min(magnitude(a), magnitude(b)))
+  if isspecial(q)
+    return iszero(q) ? 0 : Φ
+  else
+    dist = exponent(q) + Φ
+    if dist < 0
+      return 0
+    elseif dist > Φ
+      return Φ
+    else
+      return Int(dist)
+    end
+  end
+end
+
+
+function eval_basis_bs(
   Pθ::Vector, Px::Vector,
   Z::zBranchInfo{T},
   ns::Vector{fmpz},
@@ -3255,31 +3392,58 @@ function eval_basis_new(
   end
 
   # set up sum for [N0, N1)
-  FFθ = FractionField(Fθ)
-  req = elem_type(FFθ)[zero(FFθ) for j in 1:s, i in 0:τ-1]
+  numeq = elem_type(Fθ)[zero(Fθ) for j in 1:s, i in 0:τ-1]
   Pn = map(a -> a(θ + Z.λ), Pθ)
+  den = Pn[1]^(τ-1)
   for j in 1:s
-    req[j,1+0] = -Pn[1+j]//Pn[1]
+    d = -Pn[1+j]
+    g = den
+    numeq[j,1+0] = g*d
     for i in 1:τ-1
-      req[j,1+i] = derivative(req[j,1+i-1])//i
+      d = divexact(derivative(d)*Pn[1], i) - d*derivative(Pn[1])
+      g = divexact(g, Pn[1])
+      numeq[j,1+i] = d*g
     end
   end
+  den *= Pn[1]
 
   # sum [N0, N1)
   @assert τ>0
   @assert N0≥δ
   N1 = N0+10
-  sm, uM = sum_bs_diff(req, Z.z, Z.λ, δ, N1, N0, Φ)
-  N2 = N1+N1
-  sm, uM = sum_bs_diff_continue(req, Z.z, Z.λ, δ, N2, N1, N0, sm, uM, Φ)
-  N1 = N2
+  sm1, uM = sum_bs_diff(numeq, den, Z.z, Z.λ, δ, N1, N0, Φ)
+
+  overlap_count = 0
+  d1 = Φ
+  NΔ = N1
+  while N1 < maxN
+    N2 = N1 + clamp(NΔ, fld(N1+100,64), N1)
+    sm2, uM, Δ = sum_bs_diff_continue(numeq, den, Z.z, Z.λ, δ, N2, N1, N0, sm1, uM, Φ)
+    d2 = overlap_dist(sm1, Δ, sm2, τ, Φ)
+#@show (N0, N1, d2, Φ)
+    if d2 < 1
+      if (overlap_count+=1) > 1
+        (sm1, N1, d1) = (sm2, N2, d2)
+        break
+      end
+      NΔ = 10
+    else
+      overlap_count = 0
+      if d1-d2 <= 0
+        NΔ = N2
+      else
+        NΔ = trunc(Int, (N2-N1)*0.25*(d2/(d1-d2)))
+      end
+    end
+    (sm1, N1, d1) = (sm2, N2, d2)
+  end
 
   # accumulate sums for [N0, N1) and add to sum for [0,N0)
   for d in 0:δ-1, l in 1:ν
     # fdz = z^(d-N0-λ)*f^(d)(z) for the l^th initial value
     fdz = zero(nacb_poly)
     for i in 1:s
-      add!(fdz, fdz, mullow(sm[1+d,i], uN0[i,l], τ, Φ), Φ)
+      add!(fdz, fdz, mullow(sm1[1+d,i], uN0[i,l], τ, Φ), Φ)
     end
     M[1+d,l] = add(M[1+d,l], zpowlogpoly_eval(Z, N0-d, fdz, τ, Φ), Φ)
   end
@@ -3300,7 +3464,6 @@ function eval_basis_new(
 end
 
 
-
 # Return δ by ν matrix M such that for any vector iv of ν initial values the
 # solution f(z) determined by these initial values and its derivatives is M.iv.
 #  f(z) = Σ_{i,j} z^(λ-0+i)*log(z)^j/j!*( u[i,j] )
@@ -3313,16 +3476,13 @@ function eval_basis(
   δ::Int,                 # calculate f(z), f'(z), ... f^(δ-1)(z)
   Φ::Int) where T         # precision
 
-  M1 = eval_basis_old(Pθ, Px, Z, ns, αs, δ, Φ)
-  M3 = eval_basis_old_check(Pθ, Px, Z, ns, αs, δ, Φ, 20)
-  M2 = eval_basis_new(Pθ, Px, Z, ns, αs, δ, Φ)
+#  M1 = eval_basis_forward(Pθ, Px, Z, ns, αs, δ, Φ)
+  M2 = eval_basis_bs(Pθ, Px, Z, ns, αs, δ, Φ)
 
-  for i in 1:δ, j in 1:length(ns)
-    @assert overlaps(M1[i,j], M3[i,j])
-    @assert overlaps(M1[i,j], M2[i,j])
-  end
-
-  return M1
+#  for i in 1:δ, j in 1:length(ns)
+#    @assert overlaps(M1[i,j], M2[i,j])
+#  end
+  return M2
 end
 
 
@@ -3615,63 +3775,109 @@ function compute_f_near_∞(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   return s
 end
 
-function hyp_initial_values_at_1(a::Vector{T}, b::Vector{T}, p::Int) where T
+# recurrence eq for buehring's coeffs Ak(a+s,b+s)
+function buehring_equ(a::Vector{T}, b::Vector{T}, s::Int, θ) where T
+  Fθ = parent(θ)
+  t::T = 1-s-a[1]
+  eq = [θ, -(θ-1+t)*(θ-1+b[1]-a[1])]
+  for i in 2:length(b)
+    t += b[i-1]-a[i]
+    eq = hadamard_product(eq, [(θ-1+t), -one(Fθ)])
+    # before cauchy uses the diff equ, ensure that eq matches the generic case
+    if degree(eq[1]) < i
+      eq = eq .* divexact(θ*prod(θ+t-j for j in 1:i-1), eq[1])
+    end
+    eq = cauchy_product(eq, [θ, -(θ-1+b[i]-a[i])])
+    eq = hadamard_product(eq, [one(Fθ), -(θ-1+t)])
+  end
+  return eq
+end
+
+function hyp_initial_values_at_1(
+  a::Vector{T}, b::Vector{T},
+  p::Int,
+  succ_method::Bool) where T
+
   q = length(b)
   @assert length(a) == q+1
   σ::T = sum(b) - sum(a)
-  p += 10
+  p += 20
   m = trunc(Int, p+q)
   N = trunc(Int, p+q)
   iv = nacb_mat(q+1, 1)
-  if q<2 || isinteger_with_integer(σ)[1]
+
+  if q < 1
+    iv[1,1] = one(nacb)
     return iv
   end
 
-  Γboa = div(gamma(b[1], p), gamma(a[1], p), p)
+  if isinteger_with_integer(σ)[1]
+    @assert false
+    return iv
+  end
+
+  Γb1 = gamma(b[1], p)
+  Γmσ = gamma(-σ, p)
+
+  Γboa = div(Γb1, gamma(a[1], p), p)
   for i in 2:q
     mul!(Γboa, Γboa, div(gamma(b[i], p), gamma(a[i], p), p), p)
   end
 
+  # u0
+  iv[1,1] = nacb(mul(div(Γmσ, gamma(a[end], p), p), Γboa, p))
+  if q == 1
+    t = div(Γb1, Γmσ, p)
+    t = mul(t, div(neg!(pi!(narb(), p)), mul(sin_pi(σ, p), σ, p), p), p)
+    iv[1,2] = nacb(mul(t, mul(rgamma(b[1]-a[1], p), rgamma(b[1]-a[2], p), p), p))
+    return iv
+  end
+
+  Γfac = mul(Γboa, div(rising_factorial(a[end], m, p), gamma(σ+a[end]+m, p), p), p)
+
   F = parent(a[end])
   Fθ, θ = PolynomialRing(F, "θ")
-  # recurrence eq for buehring's coeffs Ak
-  t = 1 - a[1]
-  Aeq = [θ, -(θ-1+t)*(θ-1+b[1]-a[1])]
-  for i in 2:q
-    t += b[i-1]-a[i]
-    Aeq = hadamard_product(Aeq, [(θ-1+t), -one(Fθ)])
-    Aeq = cauchy_product(Aeq, [θ, -(θ-1+b[i]-a[i])])
-    Aeq = hadamard_product(Aeq, [one(Fθ), -(θ-1+t)])
-  end
-  # the big sums
-  S = [zero(narb) for i in 0:q-1]
-  for j in 0:q-1
-    eq = hadamard_product(Aeq, [(θ+σ)*(θ-1+σ+a[end]+m), -(θ-1-j+σ)])
-    tiv = initial_values(eq, [F(1)])
-    S[1+j] = sum_bs(N, eq, tiv, p+length(eq)+2*nbits(N))
-  end
+
+  # the plain terms
+  peq = elem_type(Fθ)[zero(Fθ) for j in 1:1, i in 1:1]
+  peq[1,1] = prod(θ-1+ai for ai in a)
+  peqden = θ*prod(θ-1+bi for bi in b)
+  plain_der, _ = sum_bs_diff(peq, peqden, one(nacb), F(0), q, m, 1, p+4*nbits(m))
+  add!(plain_der[1,1], plain_der[1,1], 1, p+60)
+
   # the vi coeffs
-  pf = one(F)
-  for i in 0:q-1
-    tf = inv(σ)
-    tail = zero(narb)
-    for j in 0:i
-      t = (-1)^(i-j)*binomial(fmpz(m),fmpz(i-j))*tf
-      add!(tail, tail, mul(S[1+j], t, p), p)
-      tf *= (a[end]+m+j)//(1+j-σ)
+  if succ_method
+    for i in 0:q-1
+      Aeq = buehring_equ(a, b, i, θ)
+      eq = hadamard_product(Aeq, [(θ+σ-i)*(θ-1+σ+a[end]+m-i), -(θ-1+σ-i)])
+      tail = sum_bs(N, eq, initial_values(eq, [F(1)]), p+length(eq)+4*nbits(N))
+      i==0 || mul!(Γfac, Γfac, σ-i+a[end]+m, p)
+      t2 = mul(mul(Γfac, inv(σ-i), p), tail, p)
+      t1 = coeff(plain_der[1+i,1],0)
+      iv[2+i,1] = div(add(t1, t2, p), (-1)^i*factorial(ZZ(i)), p)
     end
-    eq = [θ*prod(θ-1+i+B for B in b), -prod(θ-1+i+A for A in a)]
-    plain = mul(sum_bs(m-i, eq, [one(F)], p + 10 + 2*nbits(m)), pf, p)
-    pf *= -1//(i+1)*prod(A+i for A in a)//prod(B+i for B in b)
-    mul!(tail, tail, Γboa, p)
-    div!(tail, tail, gamma(σ+a[end]+m, p), p)
-    mul!(tail, tail, rising_factorial(a[end], m, p), p)
-    iv[2+i,1] = nacb(add(plain, tail, p));
+  else
+    Aeq = buehring_equ(a, b, 0, θ)
+    S = [zero(narb) for i in 0:q-1]
+    for j in 0:q-1
+      eq = hadamard_product(Aeq, [(θ+σ)*(θ-1+σ+a[end]+m), -(θ-1-j+σ)])
+      S[1+j] = sum_bs(N, eq, initial_values(eq, [F(1)]), p+length(eq)+4*nbits(N))
+    end
+    for i in 0:q-1
+      tf = inv(σ)
+      tail = zero(narb)
+      for j in 0:i
+        add!(tail, tail, mul(S[1+j], (-1)^(i-j)*binomial(fmpz(m),fmpz(i-j))*tf, p), p)
+        tf *= (a[end]+m+j)//(1+j-σ)
+      end
+      t2 = mul(tail, Γfac, p)
+      t1 = div(coeff(plain_der[1+i],0), (-1)^i*factorial(ZZ(i)), p)
+      iv[2+i,1] = add(t1, t2, p)
+    end
   end
-  # u0
-  iv[1,1] = nacb(mul(div(gamma(-σ, p), gamma(a[end], p), p), Γboa, p))
   return iv
 end
+
 
 function compute_f_near_1(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   p += 20
@@ -3705,9 +3911,14 @@ function compute_f_near_1(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   # 0 -> w -> 1 -> z
   sol = solve(e2, e0, p)
 #end
-#@show sol
-#@time sol2 = hyp_initial_values_at_1(a, b, p)
-#@show sol2
+  if false && !ok
+    sol2 = hyp_initial_values_at_1(a, b, p, false)
+    sol3 = hyp_initial_values_at_1(a, b, p, true)
+    for i in 1:length(a)
+      @assert overlaps(sol2[i,1], sol[i,1])
+      @assert overlaps(sol3[i,1], sol[i,1])
+    end
+  end
   e1 = eval_bases(Pθ, Px, sub(1, z, p+60), ρ, αs, 1, p)
   return mul(e1, sol, p)[1,1]
 end
@@ -3778,7 +3989,9 @@ function hypergeometric_pfq(a::Vector, b::Vector, z::acb)
 end
 
 
-println("************************** tests *****************************")
+function run_tests()
+println()
+println("***************************** tests *********************************")
 
 @testset "singular points" begin
   CC = AcbField(53)
@@ -3880,7 +4093,7 @@ end
                  CC("[0.59634736232319407434107849937 +/- 2.01e-30]"))
 end
 
-println("************************** benchmarks *****************************")
+end
 
 function run_bench(a, b, z, p, fx = "", fy = "")
 
@@ -3894,11 +4107,13 @@ function run_bench(a, b, z, p, fx = "", fy = "")
   @assert isempty(fx) || overlaps(set!(narb(), fx, p), real(f))
   @assert isempty(fy) || overlaps(set!(narb(), fy, p), imag(f))
   bits_lost = p - precision(f)
-@show bits_lost
   return bits_lost
 end
 
 function run_benchmarks()
+println()
+println("************************** benchmarks *******************************")
+
   t1 = time()
   bits_lost = 0
 
@@ -3924,6 +4139,7 @@ function run_benchmarks()
   bits_lost += run_bench([1//2,1//3,3//2,5//2],[8//7,1//6,7//2+1//4], 21//10, 100, "[-1.799478585201052861552266948753576293798081804909492183540383822249557260558139389282027739306081 +/- 2.29e-97]", "[-2.0550213095299542518482540717224091776461005489751204129826789474740506081260337268088507033546378 +/- 5.82e-98]")
   bits_lost += run_bench([1//2,1//3,1//3,3//2,3//2],[8//7,1//6,7//2+1//5,1//4], 21//10, 100, "[-0.116857050064488324880005256242593338635544257506370503116752352065017363357264920954229325317036 +/- 5.51e-97]", "[-3.515406819990606948896449062181976165047281121147375761111710596644569438443262697365115597303044 +/- 2.31e-97]")
   bits_lost += run_bench([1//2,1//3,1//3,3//2,3//2,4//3],[8//7,1//6,7//2,1//4,1//5], 21//10, 100, "[-19.9404485154538633201163293612929060982693170333095030435564215171671004250390889987049810825485 +/- 2.54e-95]", "[17.0022670479727611109224091973883810218739134352957349354752346919984236719406436188027263944349 +/- 4.04e-95]")
+  bits_lost += run_bench([1//2,1//3,1//3,3//2,3//2,4//3],[8//7,1//6,7//2,1//4,5+1//5], 101//100, 100)
   bits_lost += run_bench([1,1,2,2,3],[3//2,3//2,3//2,3//2], 21//10, 100, "[-0.51585621412817788953636435138740344792545648221588737349075642969025142618998460938638704600278106 +/- 3.91e-99]", "[-0.05470891931824783630344691907005460888039986744824234445189809615982014632842245019368879129590597 +/- 3.12e-99]")
 
   bits_lost += run_bench([-2,1,2,2,3],[4//3,4//3,4//3,4//3], 21//10, 100, "[25.724630102040816326530612244897959183673469387755102040816326530612244897959183673469387755102041 +/- 2.05e-97]")
@@ -3932,27 +4148,36 @@ function run_benchmarks()
   println("bits lost: ", bits_lost)
 end
 
-run_benchmarks()
-
-#=
-# check special currently-heuristic computation at 1
-for digits in [50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600]
-m = trunc(Int, digits*4.0)
-N = trunc(Int, digits*1.0)
-p = trunc(Int, digits*3.322)
+function run_heuristics()
 println()
-println("--------- $digits digits ----------")
-@time s1 = funny_hyp(map(QQ,[1//2,1//3,1//4,3//5]),
-                    map(QQ, [5//4,7//6,1//8]), QQ(1),
-                    m, N, p)
-@show (precision(s1)/3.322, s1)
+println("************************** heuristics *******************************")
 
-println("---- check ----")
-@time s2 = funny_hyp(map(QQ,[1//2,1//3,1//4,3//5]),
-                     map(QQ, [5//4,7//6,1//8]), QQ(1),
-                     m+100, N+100, p+100)
-@show sub(s1, s2, p+100)
+  d = 50
+  while d <= 1600
+    for z in [1, 1-1//50]
+
+      m = trunc(Int, d*4.0)
+      N = trunc(Int, d*1.0)
+      p = trunc(Int, d*3.322)
+      println()
+      println("--------- $d digits, z = $z ----------")
+
+      @time s1 = funny_hyp(map(QQ,[1//2,1//3,1//4,3//5]),
+                           map(QQ, [11//7,7//6,1//8]), QQ(z),
+                           m, N, p)
+      @time s2 = nacb(hypergeometric_pfq([1//2,1//3,1//4,3//5],
+                                         [11//7,7//6,1//8], AcbField(p)(z)))
+      if !overlaps(s1, real(s2))
+        println("oops: ", sub(s1, real(s2), p+100))
+      end
+    end
+    d = 2*d
+  end
 end
-=#
+
+run_tests()
+run_benchmarks()
+run_heuristics()
+
 nothing
 
