@@ -5,13 +5,28 @@ import Nemo: zero!, one!, add!, sub!, mul!, div!, inv!, addmul!,
        coeff, setcoeff!, mullow, gamma, rgamma, solve, overlaps, sub, derivative,
        rising_factorial, nbits
 
+macro debug()
+  return false
+end
+
 const ARF_PREC_EXACT = typemax(Int)
 
 function precision(R::AcbField)
   return R.prec
 end
 
-#### five types: arb, acb, arb_poly, acb_poly, and acb_mat #####################
+#### flint/arb types: arb, acb, arb_poly, acb_poly, and acb_mat ################
+
+
+mutable struct fmpz_poly_mock
+  coeffs::Ptr{Int}
+  alloc::Int
+  len::Int
+end
+
+mutable struct fmpz_mock
+  data::Int
+end
 
 mutable struct nmag
   rad_exp::Int # fmpz
@@ -185,6 +200,10 @@ function nacb(a::acb)
   return z
 end
 
+function nacb(a::nacb)
+  return a
+end
+
 function (R::AcbField)(a::nacb)
   z = R()
   ccall((:acb_set_round, libarb), Nothing,
@@ -282,6 +301,14 @@ function nacb_poly(c0::Int, c1::Int)
   ccall((:acb_poly_set_coeff_acb, libarb), Nothing,
         (Ref{nacb_poly}, Int, Ref{nacb}),
         z, 0, c0)
+  return z
+end
+
+function nacb_poly(c::Array{nacb})
+  z = nacb_poly()
+  for i in 1:length(c)
+    setcoeff!(z, i-1, c[i])
+  end
   return z
 end
 
@@ -418,6 +445,18 @@ function Base.setindex!(a::narb_mat, b::narb, i::Int, j::Int)
                  a, i - 1, j - 1)
     ccall((:arb_set, libarb), Nothing,
           (Ptr{narb}, Ref{narb}),
+          aij, b)
+  end
+  return b
+end
+
+function Base.setindex!(a::nacb_mat, b::narb, i::Int, j::Int)
+  GC.@preserve a begin
+    aij = ccall((:acb_mat_entry_ptr, libarb), Ptr{nacb},
+                (Ref{nacb_mat}, Int, Int),
+                 a, i - 1, j - 1)
+    ccall((:acb_set_arb, libarb), Nothing,
+          (Ptr{nacb}, Ref{narb}),
           aij, b)
   end
   return b
@@ -730,9 +769,24 @@ function add!(z::fmpq, a::fmpq, b::Int)
         z, a, b)
 end
 
+function divexact!(z::fmpz, a::fmpz, b::fmpz)
+  @assert divides(a, b)[1]
+  ccall((:fmpz_divexact, libflint), Nothing,
+        (Ref{fmpz}, Ref{fmpz}, Ref{fmpz}),
+        z, a, b)
+  return z
+end
+
 function mul!(z::fmpz, a::fmpz, b::Int)
   ccall((:fmpz_mul_si, libflint), Nothing,
         (Ref{fmpz}, Ref{fmpz}, Int),
+        z, a, b)
+  return z
+end
+
+function mul!(z::fmpq, a::fmpq, b::Int)
+  ccall((:fmpq_mul_si, libflint), Nothing,
+        (Ref{fmpq}, Ref{fmpq}, Int),
         z, a, b)
   return z
 end
@@ -961,6 +1015,10 @@ function sub(a::narb, b::narb, p::Int)
   return sub!(narb(), a, b, p)
 end
 
+function sub(a::nacb, b::nacb, p::Int)
+  return sub!(nacb(), a, b, p)
+end
+
 function sub(a::Int, b::T, p::Int) where T <: Union{narb, nacb}
   return sub!(T(), a, b, p)
 end
@@ -968,6 +1026,11 @@ end
 function add(a::Int, b::nacb, p::Int)
   return add!(nacb(), b, a, p)
 end
+
+function add(b::nacb, a::Int, p::Int)
+  return add!(nacb(), b, a, p)
+end
+
 
 
 function add!(z::narb_poly, x::narb_poly, y::narb_poly, p::Int)
@@ -1059,7 +1122,7 @@ function add(a::narb_poly, b::Int, p::Int)
   return add!(narb_poly(), a, b, p)
 end
 
-function add(a::nacb_poly, b::Int, p::Int)
+function add(a::nacb_poly, b::Union{Int, nacb_poly}, p::Int)
   return add!(nacb_poly(), a, b, p)
 end
 
@@ -1241,12 +1304,6 @@ function ldexp!(z::nacb, x::nacb, y::Int)
   return z
 end
 
-function precision_min(a::Union{narb, nacb}, b::Union{narb, nacb})
-  p = min(precision(a), precision(b))
-  b = 60
-  return clamp(p, 1, ARF_PREC_EXACT - b) + b
-end
-
 function mul!(z::nacb, a::nacb, b::Int, p::Int)
   ccall((:acb_mul_si, libarb), Nothing,
         (Ref{nacb}, Ref{nacb}, Int, Int),
@@ -1261,11 +1318,18 @@ function pow!(z::nacb, a::nacb, b::Int, p::Int)
   return z
 end
 
+function pow!(z::nacb, a::nacb, b::UInt, p::Int)
+  ccall((:acb_pow_ui, libarb), Nothing,
+        (Ref{nacb}, Ref{nacb}, UInt, Int),
+        z, a, b, p)
+  return z
+end
+
 function mul(x::narb, y::Union{fmpq, narb}, p::Int)
   return mul!(narb(), x, y, p)
 end
 
-function mul(x::nacb, y::Union{fmpq, nacb}, p::Int)
+function mul(x::nacb, y::Union{fmpq, narb, nacb}, p::Int)
   return mul!(nacb(), x, y, p)
 end
 
@@ -1285,7 +1349,7 @@ function Base.div(x::nacb, y::nacb, p::Int)
   return div!(nacb(), x, y, p)
 end
 
-function pow(x::nacb, y::Union{Int, fmpz, fmpq, narb, nacb}, p::Int)
+function pow(x::nacb, y::Union{Int, UInt, fmpz, fmpq, narb, nacb}, p::Int)
   return pow!(nacb(), x, y, p)
 end
 
@@ -1510,6 +1574,10 @@ end
 
 #### special functions required for field F with elem_type T ###################
 
+function numerator_ring(::FlintRationalField)
+  return FlintIntegerRing()
+end
+
 # integer check
 function isinteger_with_integer(x::fmpq)
   if isone(denominator(x))
@@ -1572,7 +1640,7 @@ function rgamma(a::fmpq, p::Int)
   return inv(gamma(a,p),p)
 end
 
-function rising_factorial(a::fmpq, n::Int, p::Int)
+function rising_factorial(a::fmpq, n::Union{fmpz, Int}, p::Int)
   z = narb()
   ccall((:arb_rising_fmpq_ui, libarb), Nothing,
         (Ref{narb}, Ref{fmpq}, UInt, Int),
@@ -1580,8 +1648,52 @@ function rising_factorial(a::fmpq, n::Int, p::Int)
   return z
 end
 
+function hypergeometric_2f1_regularized(a, b, c, x, Φ::Int)
+  A = nacb(a, Φ)
+  B = nacb(b, Φ)
+  C = nacb(c, Φ)
+  X = nacb(x, Φ)
+  z = nacb()
+  ccall((:acb_hypgeom_2f1, libarb), Nothing,
+        (Ref{nacb}, Ref{nacb}, Ref{nacb}, Ref{nacb}, Ref{nacb}, Cint, Int),
+        z, A, B, C, X, 1, Φ)
+  return z
+end
+
+function addmul!(z::fmpz, x::fmpz, y::fmpz)
+   ccall((:fmpz_addmul, libflint), Nothing,
+         (Ref{fmpz}, Ref{fmpz}, Ref{fmpz}),
+         z, x, y)
+   return z
+end
+
+function addmul!(z::fmpq, x::fmpq, y::fmpq)
+   ccall((:fmpq_addmul, libflint), Nothing,
+         (Ref{fmpq}, Ref{fmpq}, Ref{fmpq}),
+         z, x, y)
+   return z
+end
+
 function nbits(a::Int)
   return nbits(fmpz(a))
+end
+
+function nbits(a::fmpq)
+  return ccall((:fmpq_height_bits, libflint), UInt,
+               (Ref{fmpq},),
+               a)
+end
+
+function nbits(a::fmpq_poly)
+  den = fmpz_mock(a.den)
+  den_bits = ccall((:fmpz_bits, libflint), UInt,
+                   (Ref{fmpz_mock},),
+                   den)
+  num = fmpz_poly_mock(a.coeffs, a.alloc, a.length)
+  num_bits = ccall((:fmpz_poly_max_bits, libflint), Int,
+                   (Ref{fmpz_poly_mock},),
+                   num)
+  return max(den_bits, abs(num_bits)%UInt)
 end
 
 # hack
@@ -1590,171 +1702,6 @@ function derivative(f::FracElem)
   d = denominator(f)
   return (derivative(n)*d - n*derivative(d))//d^2
 end
-
-#### funny stuff for the evaluation of z^a*log(z)^b ############################
-
-# currently two branches of log are supported. not much need for more
-mutable struct zBranchInfo{T}
-  λ::T
-  z::nacb
-  invz_isset::Bool  # true: -π < im(log(z)) ≤ π,  false: -π ≤ im(log(z)) < π
-  invz::nacb        # ignored unless invz_isset = true
-  logz_isset::Bool
-  logz::nacb
-  logzpow::Vector{nacb}   # entry [j] is log(z)^j
-  zlogzpow::Vector{nacb}  # entry [j] is z*log(z)^j
-end
-
-function zBranchInfo{T}(λ::T, z::nacb) where T
-  return zBranchInfo{T}(λ, z, false, zero(nacb), false, zero(nacb), nacb[], nacb[])
-end
-
-function zBranchInfo{T}(λ::T, z::nacb, invz::nacb) where T
-  return zBranchInfo{T}(λ, z, true, invz, false, zero(nacb), nacb[], nacb[])
-end
-
-function set_logz(Z, Φ::Int)
-  Z.logz_isset && return
-  if Z.invz_isset
-    Z.logz = neg!(log(Z.invz, Φ::Int))
-  else
-    Z.logz = log(Z.z, Φ::Int)
-  end
-end
-
-# z^(λ+i)
-function zpow(Z::zBranchInfo, i::Int, Φ::Int)
-  if Z.invz_isset
-    pow(Z.invz, -Z.λ-i, Φ)
-  else
-    pow(Z.z, Z.λ+i, Φ)
-  end
-end
-
-# given a bound on |z|, compute z^a*log(z)^j/j!
-# at z = 0: z^a*log^j(z) = nan if re(a) < 0
-#                          0   elseif re(a) > 0
-#                          1   elseif a = 0 && j == 0
-#                          nan else
-# TODO: get this working for T != fmpq
-function fancypow_at_0(zmag::narb, a::T, j::Int, p::Int) where T <: fmpq
-  r = zero(nacb)
-  if a < 0
-    indeterminate!(r)
-  elseif a > 0
-    if iszero(zmag)
-      zero!(r)
-    else
-      s = narb()
-      t = narb()
-      # |z|^a * |log(|z|) +- Pi|^j/j!
-      pow!(s, zmag, a, p)
-      log!(t, zmag, p)
-      abs!(t, t)
-      add!(t, t, 4, p)
-      pow!(t, t, UInt(j), p)
-      div!(t, t, factorial(j, p), p)
-      mul!(s, s, t, p)
-      add_error!(r, s)
-    end
-  elseif a == 0 && j == 0
-    one!(r)
-  else
-    indeterminate!(r)
-  end
-  return r
-end
-
-# z^(λ+i)*log(z)^j/j!
-function zpowlogpow(Z::zBranchInfo, i::Int, j::Int, Φ::Int)
-  @assert j≥0
-  if j<1
-    return zpow(Z, i, Φ)
-  end
-  set_logz(Z, Φ)
-  if isfinite(Z.logz)
-    return div(mul(zpow(Z, i, Φ), pow(Z.logz, j, Φ), Φ), factorial(j, Φ), Φ)
-  else
-    return fancypow_at_0(abs_upper(Z.z, Φ), Z.λ+i, j, Φ)
-  end
-end
-
-# log(z)^j
-function logzpow(Z::zBranchInfo, j::Int, Φ::Int)
-  @assert j≥0
-  j<1 && return one(nacb)
-  set_logz(Z, Φ)
-  while j>length(Z.logzpow)
-    i = 1+length(Z.logzpow)
-    push!(Z.logzpow, pow(Z.logz, i, Φ))
-  end
-  return Z.logzpow[j]
-end
-
-# z*log(z)^j
-function zlogzpow(Z::zBranchInfo, j::Int, Φ::Int)
-  @assert j≥0
-  j<1 && return Z.z
-  set_logz(Z, Φ)
-  while j>length(Z.zlogzpow)
-    i = 1+length(Z.zlogzpow)
-    if isfinite(Z.logz)
-      res = mul(Z.z, pow(Z.logz, i, Φ), Φ)
-    else
-      res = fancypow_at_0(abs_upper(Z.z, Φ), fmpq(1), j, Φ)
-    end
-    push!(Z.zlogzpow, res)
-  end
-  return Z.zlogzpow[j]
-end
-
-# sum_{j<τ} |(z+ε)^δ*log(z+ε)|/j!  mod ε^δ
-function logzpoly_series(Z::zBranchInfo, δ::Int, τ::Int, Φ::Int)
-  @assert δ>0
-  c = Vector{fmpq}[fmpq[QQ(binomial(ZZ(δ), ZZ(k)))] for k in 0:δ-1]
-  ff = [abs(mul(Z.z, c[1+k][1], Φ), Φ) for k in 0:δ-1]
-  jfac = fmpz(1)
-  for j in 1:τ-1
-    mul!(jfac, jfac, j)
-    for k in δ-1:-1:0
-      pushfirst!(c[1+k], zero(QQ))
-      for l in 1:k, m in 0:j-1
-          c[1+k][1+m] += (-1)^(l-1)*c[1+k-l][1+m]//l
-      end
-    end
-    for k in 0:δ-1
-      tt = mul(Z.z, c[1+k][1+0], Φ)
-      for m in 1:j
-        add!(tt, tt, mul(zlogzpow(Z, m, Φ), c[1+k][1+m], Φ), Φ)
-      end
-      add!(ff[1+k], ff[1+k], div(abs(tt, Φ), jfac, Φ), Φ)
-    end
-  end
-  for k in 0:δ-2
-    mul!(ff[1+k], ff[1+k], pow(abs(Z.z, Φ), UInt(δ-1-k), Φ), Φ)
-  end
-  return narb_poly(ff)
-end
-
-# z^(λ+n)*Σ_{j<τ}e_j*Λ^(τ-1-j) with Λ^(τ-1-j) replaced by log(z)^j/j!
-function zpowlogpoly_eval(Z::zBranchInfo, n::Int, e::nacb_poly, τ::Int, Φ::Int)
-  if τ<2
-    return mul(zpow(Z, n, Φ), coeff(e, 0), Φ)
-  end
-  set_logz(Z, Φ)
-  j = τ-1
-  ok = isfinite(Z.logz)
-  s = mul(coeff(e, τ-1-j), ok ? logzpow(Z, j, Φ) : zlogzpow(Z, j, Φ), Φ)
-  t = nacb()
-  while (j-=1)>0
-    div!(t, s, j+1, Φ)
-    mul!(s, coeff(e, τ-1-j), ok ? logzpow(Z, j, Φ) : zlogzpow(Z, j, Φ), Φ)
-    add!(s, s, t, Φ)
-  end
-  add!(s, s, ok ? coeff(e, τ-1) : mul!(t, coeff(e, τ-1), Z.z, Φ),  Φ)
-  return mul(zpow(Z, n-!ok, Φ), s, Φ)
-end
-
 
 
 #### recurrence relations and diff equations ###################################
@@ -1796,117 +1743,472 @@ function equ_sub!(c1::Vector, c2::Vector)
   return c1
 end
 
-function mul!(z::Matrix{fmpq_poly}, a::fmpq)
-  
-end
-
-function mul!(z::Matrix{nacb_poly}, a::nacb, Φ::Int)
-  for i in z
-    mul!(i, i, a, Φ::Int)
-  end
+function nacb_poly(a::fmpq_poly, Φ::Int)
+  z = nacb_poly()
+  ccall((:acb_poly_set_fmpq_poly, libarb), Nothing,
+        (Ref{nacb_poly}, Ref{fmpq_poly}, Int),
+        z, a, Φ)
   return z
 end
 
-function add!(z::Matrix{nacb_poly}, a::Matrix{nacb_poly}, b::Matrix{nacb_poly}, Φ::Int)
-  (m, n) = size(a)
-  for i in 1:m, j in 1:n
-    add!(z[i,j], a[i,j], b[i,j], Φ)
-  end
-  return z
+mutable struct BiElem{T}
+  isexact::Bool
+  haveapprox::Bool
+  exact::T
+  approx::nacb
 end
 
-function mul!(z::Matrix{nacb_poly}, a::Matrix{nacb_poly}, b::Matrix{nacb_poly}, ord::Int, Φ::Int)
-  (m, k) = size(a)
-  (k2, n) = size(b)
-  @assert m > 0 && n > 0 && k > 0 && k == k2
-  t = nacb_poly()
-  for i in 1:m, j in 1:n
-    mullow!(z[i,j], a[i,1], b[1,j], ord, Φ)
-    for l in 2:k
-      mullow!(t, a[i,l], b[l,j], ord, Φ)
-      add!(z[i,j], z[i,j], t, Φ)
+# TODO get rid of BiFrac
+mutable struct BiFrac{T}
+  isexact::Bool
+  haveapprox::Bool
+  num::T
+  den::T
+  approx::nacb
+end
+
+mutable struct BiMatrix{T}
+  isexact::Bool
+  haveapprox::Bool
+  num::Array{T, 3}
+  den::T
+  approx::Array{nacb, 3}
+end
+
+function BiElem{T}(a::nacb, F) where T
+  @assert T == elem_type(F)
+  return BiElem{T}(false, true, zero(F), a)
+end
+
+function BiElem{T}(a::T, F) where T
+  @assert T == elem_type(F)
+  return BiElem{T}(true, false, a, nacb())
+end
+
+function BiFrac{T}(a::nacb, F) where T
+  @assert T == elem_type(F)
+  return BiFrac{T}(false, true, zero(F), zero(F), a)
+end
+
+function BiFrac{T}(n::T, d::T, F) where T
+  @assert T == elem_type(F)
+  return BiFrac{T}(true, false, n, d, nacb())
+end
+
+function BiMatrix{T}(m::Int, n::Int, τ::Int, F) where {T}
+  @assert T == elem_type(F)
+  return BiMatrix(true, false,
+            [zero(F) for i in 1:m, j in 1:n, k in 1:τ], one(F),
+            [nacb()  for i in 1:m, j in 1:n, k in 1:τ])
+end
+
+function get_approx(z::BiElem, Φ::Int)
+  if !z.haveapprox
+    z.haveapprox = true
+    z.approx = nacb(z.exact, Φ)
+  end
+  return z.approx
+end
+
+function get_approx(z::BiFrac, Φ::Int)
+  if !z.haveapprox
+    z.haveapprox = true
+    z.approx = div(nacb(z.num, Φ), nacb(z.den, Φ), Φ)
+  end
+  return z.approx
+end
+
+function force_approx(z::BiFrac, Φ::Int)
+  z.isexact || return
+  z.haveapprox = true
+  z.isexact = false
+  z.approx = div(nacb(z.num, Φ), nacb(z.den, Φ), Φ)
+end
+
+function get_approx(z::BiMatrix, Φ::Int)
+  if !z.haveapprox
+    z.haveapprox = true
+    (m, n, τ) = size(z.num)
+    den = nacb(z.den, Φ)
+    for i in 1:m, j in 1:n, k in 1:τ
+      z.approx[i,j,k] = div(nacb(z.num[i,j,k], Φ), den, Φ)
     end
   end
+  return z.approx
+end
+
+function force_approx(z::BiMatrix, Φ::Int)
+  z.isexact || return
+  z.isexact = false
+  get_approx(z, Φ)
+end
+
+
+function limit_prec(r::BiMatrix, Φ::Int)
+  r.isexact || return
+  if nbits(r.den) > Φ
+    force_approx(r, Φ)
+    return
+  end
+  (m, n, τ) = size(r.num)
+  for i in 1:m, j in 1:n, k in 1:τ
+    if nbits(r.num[i,j,k]) > Φ
+      force_approx(r, Φ)
+      return
+    end
+  end
+end
+
+function mullow(a::BiMatrix{T}, b::BiMatrix{T}, Φ::Int) where {T}
+  (m, p, τ) = size(a.num)
+  (p2, n, τ2) = size(b.num)
+  @assert p == p2 && τ == τ2
+
+  F = parent(a.num[1,1,1])
+  znum = T[zero(F) for i in 1:m, j in 1:n, k in 1:τ]
+  zapprox = nacb[zero(nacb) for i in 1:m, j in 1:n, k in 1:τ]
+
+  if a.isexact && b.isexact
+    for i in 1:m, j in 1:n, h in 1:p, k in 0:τ-1, l in 0:k
+      addmul!(znum[i,j,1+k], a.num[i,h,1+l], b.num[h,j,1+k-l])
+    end
+    return BiMatrix{T}(true, false, znum, a.den*b.den, zapprox)
+  end
+  
+  if !a.isexact && !b.isexact
+    mullow!(zapprox, a.approx, b.approx, Φ)
+  else
+    t = nacb()
+    if !a.isexact && b.isexact
+      for i in 1:m, j in 1:n, h in 1:p, k in 0:τ-1, l in 0:k
+        mul!(t, a.approx[i,h,1+l], b.num[h,j,1+k-l], Φ)
+        add!(zapprox[i,j,1+k], zapprox[i,j,1+k], t, Φ)
+      end
+      t = nacb(b.den, Φ)
+    else
+      for i in 1:m, j in 1:n, h in 1:p, k in 0:τ-1, l in 0:k
+        mul!(t, b.approx[h,j,1+k-l], a.num[i,h,1+l], Φ)
+        add!(zapprox[i,j,1+k], zapprox[i,j,1+k], t, Φ)
+      end
+      t = nacb(a.den, Φ)
+    end
+    for i in 1:m, j in 1:n, h in 1:τ
+      div!(zapprox[i,j,h], zapprox[i,j,h], t, Φ)
+    end
+  end
+  return BiMatrix{T}(false, true, znum, zero(F), zapprox)
+end
+
+function mullow!(z::Array{nacb, 3}, a::Array{nacb, 3}, b::Array{nacb, 3}, Φ)
+  (m, p, τ) = size(a)
+  (p2, n, τ2) = size(b)
+  @assert p == p2 && τ == τ2
+  t = nacb()
+  for i in 1:m, j in 1:n, h in 1:p, k in 0:τ-1, l in 0:k
+    mul!(t, a[i,h,1+l], b[h,j,1+k-l], Φ)
+    add!(z[i,j,1+k], z[i,j,1+k], t, Φ)
+  end
   return z
 end
 
-function mul(a::Matrix{nacb_poly}, b::Matrix{nacb_poly}, ord::Int, Φ::Int)
-  (m, k) = size(a)
-  (k, n) = size(b)
-  return mul!([nacb_poly() for i in 1:m, j in 1:n], a, b, ord, Φ)
+function mullow(a::Array{nacb, 3}, b::Array{nacb, 3}, Φ)
+  (m, p, τ) = size(a)
+  (p2, n, τ2) = size(b)
+  @assert p == p2 && τ == τ2
+  return mullow!([zero(nacb) for i in 1:m, j in 1:n, k in 1:τ], a, b, Φ)
 end
 
+function mul!(z::Array{nacb, 3}, a::nacb, Φ::Int)
+  for i in z
+    mul!(i, i, a, Φ)
+  end
+end
+
+function add!(z::Array{nacb, 3}, a::Array{nacb, 3}, b::Array{nacb, 3}, Φ::Int)
+  (m, n, τ) = size(a)
+  for i in 1:m, j in 1:n, k in 1:τ
+    add!(z[i,j,k], a[i,j,k], b[i,j,k], Φ)
+  end
+  return z
+end
+
+function add(a::Array{nacb, 3}, b::Array{nacb, 3}, Φ::Int)
+  (m, n, τ) = size(a)
+  return nacb[add(a[i,j,k], b[i,j,k], Φ) for i in 1:m, j in 1:n, k in 1:τ]
+end
+
+function mul!(z::Array{T, 3}, a::Array{T, 3}, b::T) where T
+  (m, n, τ) = size(a)
+  for i in 1:m, j in 1:n, k in 1:τ
+    mul!(z[i,j,k], a[i,j,k], b)
+  end
+end
+
+function addmul!(z::Array{T, 3}, a::Array{T, 3}, b::T) where T
+  (m, n, τ) = size(a)
+  for i in 1:m, j in 1:n, k in 1:τ
+    addmul!(z[i,j,k], a[i,j,k], b)
+  end
+end
+
+
+function normalize_content(num::Matrix{PT}, den::PT) where PT
+  (s, τ) = size(num)
+
+  ZF = FlintIntegerRing()
+  Zθ,_ = PolynomialRing(ZZ, "θ")
+
+
+  g = content(den)
+  for i in 1:s, j in 1:τ
+    g = gcd(g, content(num[i,j]))
+  end
+
+  numZ = elem_type(Zθ)[map_coeffs(c-> numerator(c), divexact(num[i,j], g), parent=Zθ)
+                       for i in 1:s, j in 1:τ]
+
+  denZ::elem_type(Zθ) = map_coeffs(c-> numerator(c), divexact(den, g), parent=Zθ)
+
+  return (numZ, denZ)
+end
+
+
+
+mutable struct SumBsCtx{ZT, PZT}
+  N0::Int
+  N1::Int
+  eqnum::Matrix{PZT}
+  eqden::PZT
+  z::BiFrac{ZT}
+  λnum::ZT
+  λden::ZT
+  Σcurr::BiMatrix{ZT}
+  Σprev::BiMatrix{ZT}
+  Δ::BiMatrix{ZT}
+  M::BiMatrix{ZT}
+end
+
+function sum_bs_start(
+  eq::Matrix{PT}, den::PT,
+  z::BiElem{T},
+  λ::T,
+  δ::Int,
+  N1::Int, N0::Int,
+  Φ::Int) where {T, PT}
+
+  F = parent(λ)
+  ZF = numerator_ring(F)
+  ZFθ, _ = PolynomialRing(ZF, "θ", cached=true)
+
+  ZT = elem_type(ZF)
+  PZT = elem_type(ZFθ)
+
+  (s, τ) = size(eq)
+
+  g = content(den)
+  for i in 1:s, j in 1:τ
+    g = gcd(g, content(eq[i,j]))
+  end
+
+  eqnum = PZT[map_coeffs(numerator, divexact(eq[i,j], g), parent=ZFθ) for i in 1:s, j in 1:τ]
+  eqden::PZT = map_coeffs(numerator, divexact(den, g), parent=ZFθ)
+
+  λnum::ZT = numerator(λ)
+  λden::ZT = denominator(λ)
+
+  biz = z.isexact ? BiFrac{ZT}(numerator(z.exact), denominator(z.exact), ZF) :
+                    BiFrac{ZT}(z.approx, ZF)
+  (Σ, M) = sum_bs_der_recursive(eqnum, eqden, biz, λnum, λden, δ, N1, N0, Φ)
+  Σp = BiMatrix{ZT}(δ, s, τ, ZF)
+  Δ = BiMatrix{ZT}(δ, s, τ, ZF)
+  return SumBsCtx{ZT, PZT}(N0, N1, eqnum, eqden, biz, λnum, λden, Σ, Σp, Δ, M)
+
+end
+
+
+function sum_bs_continue(
+  S::SumBsCtx{ZT, PZT},
+  N::Int,
+  Φ::Int) where {ZT, PZT}
+
+  (δ, s, τ) = size(S.Σcurr.approx)
+  (Σ, S.M, S.Δ) = sum_bs_der_continue(S.eqnum, S.eqden, S.z, S.λnum, S.λden,
+                                      δ, N, S.N1, S.N0, S.Σcurr, S.M, Φ)
+  (S.Σcurr, S.Σprev) = (Σ, S.Σcurr)
+  S.N1 = N
+
+  return overlap_dist(get_approx(S.Σcurr, Φ),
+                      get_approx(S.Δ, Φ),
+                      get_approx(S.Σprev, Φ), Φ)
+end
+
+function get_sum(S::SumBsCtx, Φ::Int)
+  return get_approx(S.Σcurr, Φ)
+end
 
 # let f(z) = Σ_{N0≤i<N1, 0≤j<τ} u[i,j]*z^(λ+i)*log(z)^j/j!
 # return [z^(d-N0-λ)*f^(d)(z)]_{0≤d<δ} as a δxs matrix of acb_poly in Λ
-function sum_bs_diff(
+function sum_bs_der(
   eq::Matrix{PT}, den::PT,  # size sxτ
-  z::nacb,
-  λ::T,
+  z::BiFrac{T},
+  λnum::T, λden::T,
   δ::Int,
   N1::Int, N0::Int,
   Φ::Int) where {PT, T}
 
-  return sum_bs_diff_rec(eq, den, z, λ, δ, N1, N0, Φ)
+  return sum_bs_der_recursive(eq, den, z, λ, δ, N1, N0, Φ)
 end
 
-function sum_bs_diff_continue(
+function sum_bs_der_continue(
   eq::Matrix{PT}, den::PT,  # size sxτ
-  z::nacb,
-  λ::T,
+  z::BiFrac{T},
+  λnum::T, λden::T,
   δ::Int,
   hi::Int, mid::Int, lo::Int,
-  S0::Matrix{nacb_poly}, M0::Matrix{nacb_poly},
-  Φ::Int) where {PT, T}
+  Σ0::BiMatrix{T}, M0::BiMatrix{T},
+  Φ::Int) where {T, PT}
 
   (s, τ) = size(eq)
-  S = [nacb_poly() for i in 1:δ, j in 1:s]
-  M = [nacb_poly() for i in 1:s, j in 1:s]
-  (S1, M1) = sum_bs_diff_rec(eq, den, z, λ, δ, hi, mid, Φ)
-  Δ = mul!(mul(S1, M0, τ, Φ), pow(z, mid-lo, Φ), Φ)
-  add!(S, S0, Δ, Φ)
-  mul!(M, M1, M0, τ, Φ)
-  return (S, M, Δ)
+  F = parent(λnum)
+  Σ1, M1 = sum_bs_der_recursive(eq, den, z, λnum, λden, δ, hi, mid, Φ)
+  Δ = mullow(Σ1, M0, Φ)
+  limit_prec(Δ, Φ)
+  Σ = BiMatrix{T}(δ, s, τ, F)
+  if z.isexact && Δ.isexact && Σ0.isexact
+    # Σ0n/Σ0d + Δn/Δd * zn^k/zd^k = Σ0n/Σ0d + Σ1/Σ1d*M0/M0d * zn^k/zd^k
+    # M0d should "divide" Σ0d
+    zdenk = z.den^(mid-lo)
+    znumk = z.num^(mid-lo)
+    Σ.den = zdenk*Σ0.den*Σ1.den
+    mul!(Σ.num, Δ.num, divexact(Σ0.den, M0.den)*znumk)
+    addmul!(Σ.num, Σ0.num, Σ1.den*zdenk)
+    limit_prec(Σ, Φ)
+    Δ.den = Δ.den*zdenk
+    mul!(Δ.num, Δ.num, znumk)
+  else
+    force_approx(Δ, Φ)
+    mul!(Δ.approx, pow(get_approx(z, Φ), mid-lo, Φ), Φ)
+    Σ.isexact = false
+    Σ.haveapprox = true
+    add!(Σ.approx, get_approx(Σ0, Φ), Δ.approx, Φ)
+  end
+  M = mullow(M1, M0, Φ)
+  limit_prec(M, Φ)
+  return (Σ, M, Δ)
 end
 
-function sum_bs_diff_rec(
+function sum_bs_der_recursive(
   eq::Matrix{PT}, den::PT,  # size sxτ
-  z::nacb,
-  λ::T,
+  z::BiFrac{T},
+  λnum::T, λden::T,
   δ::Int,
   hi::Int, lo::Int,
-  Φ::Int) where {PT, T}
+  Φ::Int) where {T, PT}
 
-  @assert hi > lo
+  @assert hi>lo
+
+  if hi > lo + (z.isexact ? 10 : 1)
+    mid = cld(hi+lo,2)
+    (Σ0, M0) = sum_bs_der_recursive(eq, den, z, λnum, λden, δ, mid, lo, Φ)
+    (Σ, M, Δ) = sum_bs_der_continue(eq, den, z, λnum, λden, δ, hi, mid, lo, Σ0, M0, Φ)
+    return (Σ, M)
+  end
 
   (s, τ) = size(eq)
-  S = [nacb_poly() for i in 1:δ, j in 1:s]
-  M = [nacb_poly(i-1==j ? 1 : 0) for i in 1:s, j in 1:s] # companion diagonal
+  F = parent(λnum)
 
-  if hi<lo+2
-    deneval = evaluate(den,lo)
-    for i in 0:s-1, j in 0:τ-1
-      e = evaluate(eq[1+i,1+j],lo)//deneval
-      setcoeff!(M[1,1+i], j, nacb(e, Φ))
+  Σ = BiMatrix{T}(δ, s, τ, F)
+  M = BiMatrix{T}(s, s, τ, F)
+
+  de = evaluate(den, lo)
+  M.den = de
+  for j in 1:s, k in 1:τ
+    M.num[1,j,k] = evaluate(eq[j,k], lo)
+  end
+  for i in 2:s
+    M.num[i,i-1,1] = deepcopy(de)
+  end
+
+  ff = T[λden^(δ-1)]  # λden^(δ-1)*(Λ+λ+n-0)*(Λ+λ+n-1)*...*(Λ+λ+n-(d-1))
+  mul!(Σ.den, ff[1+0], de)
+  for j in 1:s, k in 1:τ
+    mul!(Σ.num[1,j,k], ff[1+0], M.num[1,j,k])
+  end
+  for d in 1:δ-1
+    shift = (lo-(d-1))*λden+λnum
+    # ff *= lo-(d-1)+λ + Λ
+    for i in 1:length(ff)
+      divexact!(ff[i], ff[i], λden)
     end
-    ff = one(nacb_poly) # (Λ+n-0)*(Λ+n-1)*...*(Λ+n-(i-1))
-    for j in 0:s-1
-      S[1,1+j] = M[1,1+j]
+    for i in length(ff):-1:1
+      mul!(ff[i], ff[i], shift)
+      i == 1 || addmul!(ff[i], ff[i-1], λden)
     end
-    for d in 1:δ-1
-      ff = mullow(ff, nacb_poly(nacb(lo-(d-1)+λ, Φ), 1), τ, Φ)
-      for j in 0:s-1
-        S[1+d,1+j] = mullow(ff, M[1,1+j], τ, Φ)
+    length(ff) >= τ || push!(ff, λden^(δ-1))
+    for j in 1:s, k in 0:τ-1, l in 0:k
+      addmul!(Σ.num[1+d,j,1+k], ff[1+l], M.num[1,j,1+k-l])
+    end
+  end
+
+  if lo+1==hi
+    return (Σ, M)
+  end
+
+  @assert z.isexact
+
+  tt = [zero(F) for k in 1:τ]
+  for n in lo+1:hi-1
+    # update M
+    de = evaluate(den, n)
+    ne = T[evaluate(eq[i,k], n) for i in 1:s, k in 1:τ]
+    for j in 1:s
+      # update column j
+      for k in 0:τ-1
+        zero!(tt[1+k])
+      end
+      for k in 0:τ-1, h in 0:k
+        addmul!(tt[1+k], ne[1,1+h], M.num[1,j,1+k-h])
+      end
+      for i in s:-1:2
+        for k in 0:τ-1, h in 0:k
+          addmul!(tt[1+k], ne[i,1+h], M.num[i,j,1+k-h])
+        end
+        for k in 0:τ-1
+          mul!(M.num[i,j,1+k], de, M.num[i-1,j,1+k])
+        end
+      end
+      for k in 0:τ-1
+        (M.num[1,j,1+k], tt[1+k]) = (tt[1+k], M.num[1,j,1+k])
       end
     end
-  else
-    mid = cld(hi+lo,2)
-    (S0, M0) = sum_bs_diff_rec(eq, den, z, λ, δ, mid, lo, Φ)
-    (S1, M1) = sum_bs_diff_rec(eq, den, z, λ, δ, hi, mid, Φ)
-    add!(S, S0, mul!(mul(S1, M0, τ, Φ), pow(z, mid-lo, Φ), Φ) , Φ)
-    mul!(M, M1, M0, τ, Φ)
+    mul!(M.den, M.den, de)
+
+    # update Σ
+    mul!(Σ.den, Σ.den, z.den*de)
+    mul!(Σ.num, Σ.num, z.den*de)
+    # Σ.num += zn^(n-lo)*ff*M.num
+    ff = T[λden^(δ-1)*z.num^(n-lo)]  # zn^(n-lo)*λd^(δ-1)*(Λ+λ+n-0)*(Λ+λ+n-1)*...*(Λ+λ+n-(d-1))
+    for j in 1:s, k in 1:τ
+      addmul!(Σ.num[1,j,k], ff[1+0], M.num[1,j,k])
+    end
+    for d in 1:δ-1
+      shift = (n-(d-1))*λden + λnum
+      # ff *= n-(d-1)+λ + Λ
+      for i in 1:length(ff)
+        divexact!(ff[i], ff[i], λden)
+      end
+      for i in length(ff):-1:1
+        mul!(ff[i], ff[i], shift)
+        i == 1 || addmul!(ff[i], ff[i-1], λden)
+      end
+      length(ff) >= τ || push!(ff, λden^(δ-1)*z.num^(n-lo))
+      for j in 1:s, k in 0:τ-1, l in 0:k
+        addmul!(Σ.num[1+d,j,1+k], ff[1+l], M.num[1,j,1+k-l])
+      end
+    end
   end
-  return (S, M)
+
+  return (Σ, M)
 end
 
 
@@ -1954,7 +2256,6 @@ function limit_prec!(z::bimatrix, p::Int)
 end
 
 
-
 function sum_bs_recursive!(
   z::bimatrix,
   k1::Int, k2::Int,
@@ -1963,7 +2264,7 @@ function sum_bs_recursive!(
 
   d = length(num)
 
-  if k2-k1<=20
+  if k2-k1<=10
     z.isexact = true
     zero!(z.p)
     one!(z.q)
@@ -2034,6 +2335,7 @@ function rescale(eq::Vector{fmpq_poly})
                       for i in 1:length(eq)]  
 end
 
+# TODO get rid of this
 function sum_bs(
   k::Int,
   eq::Vector{fmpq_poly},
@@ -2101,6 +2403,9 @@ function hadamard_product(A::Vector{S}, B::Vector{S}) where S
   elseif ra == 1
     return hadamard_product1(B, A[1], A[2])
   end
+
+  # TODO oh my gosh is this slow
+
   Fθ = parent(B[1])
   FFθ = FractionField(Fθ)
   θ = gen(Fθ)
@@ -2165,7 +2470,8 @@ function cauchy_product(Aθ::Vector, Bθ::Vector)
   Fx, x = PolynomialRing(F, "x")
   Ax = transpose_vars(Aθ, Fx)
   Bx = transpose_vars(Bθ, Fx)
-  @assert length(Bx) == 2
+
+  @assert length(Bx) == 2 # only thing that's needed and only thing that works
 
   xlogdbx = -(Bx[1+0]+x*derivative(Bx[1+1]))//(Bx[1+1])
 
@@ -2210,26 +2516,188 @@ function initial_values(A, v::Vector{T}) where T
   return initial_values(A, v, length(A)-1)
 end
 
-function hypergeometric_2f1_regularized(a, b, c, x, Φ::Int)
-  A = nacb(a, Φ)
-  B = nacb(b, Φ)
-  C = nacb(c, Φ)
-  X = nacb(x, Φ)
-  z = nacb()
-  ccall((:acb_hypgeom_2f1, libarb), Nothing,
-        (Ref{nacb}, Ref{nacb}, Ref{nacb}, Ref{nacb}, Ref{nacb}, Cint, Int),
-        z, A, B, C, X, 1, Φ)
-  return z
+
+#### funny stuff for the evaluation of z^a*log(z)^b ############################
+
+# currently two branches of log are supported. not much need for more
+mutable struct zBranchInfo{T}
+  λ::T
+  biz::BiElem{T}
+  invz_isset::Bool  # true: -π < im(log(z)) ≤ π,  false: -π ≤ im(log(z)) < π
+  invz::nacb        # ignored unless invz_isset = true
+  logz_isset::Bool
+  logz::nacb
+  logzpow::Vector{nacb}   # entry [j] is log(z)^j
+  zlogzpow::Vector{nacb}  # entry [j] is z*log(z)^j
 end
+
+function zBranchInfo{T}(λ::T, z) where T
+  return zBranchInfo{T}(λ, BiElem{T}(z, parent(λ)), false, zero(nacb), false, zero(nacb), nacb[], nacb[])
+end
+
+function zBranchInfo{T}(λ::T, z::nacb, invz::nacb) where T
+  return zBranchInfo{T}(λ, BiElem{T}(z, parent(λ)), true, invz, false, zero(nacb), nacb[], nacb[])
+end
+
+function get_approx(Z::zBranchInfo, Φ::Int)
+  return get_approx(Z.biz, Φ)
+end
+
+function set_logz(Z::zBranchInfo, Φ::Int)
+  Z.logz_isset && return
+  if Z.invz_isset
+    Z.logz = neg!(log(Z.invz, Φ))
+  else
+    Z.logz = log(get_approx(Z, Φ), Φ)
+  end
+end
+
+# z^(λ+i)
+function zpow(Z::zBranchInfo, i::Int, Φ::Int)
+  if Z.invz_isset
+    pow(Z.invz, -Z.λ-i, Φ)
+  else
+    pow(get_approx(Z, Φ), Z.λ+i, Φ)
+  end
+end
+
+# given a bound on |z|, compute z^a*log(z)^j/j!
+# at z = 0: z^a*log^j(z) = nan if re(a) < 0
+#                          0   elseif re(a) > 0
+#                          1   elseif a = 0 && j == 0
+#                          nan else
+# TODO: get this working for T != fmpq
+function fancypow_at_0(zmag::narb, a::T, j::Int, p::Int) where T <: fmpq
+  r = zero(nacb)
+  if a < 0
+    indeterminate!(r)
+  elseif a > 0
+    if iszero(zmag)
+      zero!(r)
+    else
+      s = narb()
+      t = narb()
+      # |z|^a * |log(|z|) +- Pi|^j/j!
+      pow!(s, zmag, a, p)
+      log!(t, zmag, p)
+      abs!(t, t)
+      add!(t, t, 4, p)
+      pow!(t, t, UInt(j), p)
+      div!(t, t, factorial(j, p), p)
+      mul!(s, s, t, p)
+      add_error!(r, s)
+    end
+  elseif a == 0 && j == 0
+    one!(r)
+  else
+    indeterminate!(r)
+  end
+  return r
+end
+
+# z^(λ+i)*log(z)^j/j!
+function zpowlogpow(Z::zBranchInfo, i::Int, j::Int, Φ::Int)
+  @assert j≥0
+  if j<1
+    return zpow(Z, i, Φ)
+  end
+  set_logz(Z, Φ)
+  if isfinite(Z.logz)
+    return div(mul(zpow(Z, i, Φ), pow(Z.logz, j, Φ), Φ), factorial(j, Φ), Φ)
+  else
+    return fancypow_at_0(abs_upper(get_approx(Z, Φ), Φ), Z.λ+i, j, Φ)
+  end
+end
+
+# log(z)^j
+function logzpow(Z::zBranchInfo, j::Int, Φ::Int)
+  @assert j≥0
+  j<1 && return one(nacb)
+  set_logz(Z, Φ)
+  while j>length(Z.logzpow)
+    i = 1+length(Z.logzpow)
+    push!(Z.logzpow, pow(Z.logz, i, Φ))
+  end
+  return Z.logzpow[j]
+end
+
+# z*log(z)^j
+function zlogzpow(Z::zBranchInfo, j::Int, Φ::Int)
+  @assert j≥0
+  z = get_approx(Z, Φ)
+  j<1 && return z
+  set_logz(Z, Φ)
+  while j>length(Z.zlogzpow)
+    i = 1+length(Z.zlogzpow)
+    if isfinite(Z.logz)
+      res = mul(z, pow(Z.logz, i, Φ), Φ)
+    else
+      res = fancypow_at_0(abs_upper(z, Φ), fmpq(1), j, Φ)
+    end
+    push!(Z.zlogzpow, res)
+  end
+  return Z.zlogzpow[j]
+end
+
+# sum_{j<τ} |(z+ε)^δ*log(z+ε)|/j!  mod ε^δ
+function logzpoly_series(Z::zBranchInfo, δ::Int, τ::Int, Φ::Int)
+  @assert δ>0
+  c = Vector{fmpq}[fmpq[QQ(binomial(ZZ(δ), ZZ(k)))] for k in 0:δ-1]
+  ff = [abs(mul(get_approx(Z, Φ), c[1+k][1], Φ), Φ) for k in 0:δ-1]
+  jfac = fmpz(1)
+  for j in 1:τ-1
+    mul!(jfac, jfac, j)
+    for k in δ-1:-1:0
+      pushfirst!(c[1+k], zero(QQ))
+      for l in 1:k, m in 0:j-1
+          c[1+k][1+m] += (-1)^(l-1)*c[1+k-l][1+m]//l
+      end
+    end
+    for k in 0:δ-1
+      tt = mul(get_approx(Z, Φ), c[1+k][1+0], Φ)
+      for m in 1:j
+        add!(tt, tt, mul(zlogzpow(Z, m, Φ), c[1+k][1+m], Φ), Φ)
+      end
+      add!(ff[1+k], ff[1+k], div(abs(tt, Φ), jfac, Φ), Φ)
+    end
+  end
+  for k in 0:δ-2
+    mul!(ff[1+k], ff[1+k], pow(abs(get_approx(Z, Φ), Φ), UInt(δ-1-k), Φ), Φ)
+  end
+  return narb_poly(ff)
+end
+
+# z^(λ+n)*Σ_{j<τ}e_j*Λ^(τ-1-j) with Λ^(τ-1-j) replaced by log(z)^j/j!
+function zpowlogpoly_eval(Z::zBranchInfo, n::Int, e::Vector{nacb}, Φ::Int)
+  τ = length(e)
+  if τ<2
+    return mul(zpow(Z, n, Φ), e[1+0], Φ)
+  end
+  set_logz(Z, Φ)
+  j = τ-1
+  ok = isfinite(Z.logz)
+  s = mul(e[1+τ-1-j], ok ? logzpow(Z, j, Φ) : zlogzpow(Z, j, Φ), Φ)
+  t = nacb()
+  while (j-=1)>0
+    div!(t, s, j+1, Φ)
+    mul!(s, e[1+τ-1-j], ok ? logzpow(Z, j, Φ) : zlogzpow(Z, j, Φ), Φ)
+    add!(s, s, t, Φ)
+  end
+  add!(s, s, ok ? e[1+τ-1] : mul!(t, e[1+τ-1], get_approx(Z, Φ), Φ),  Φ)
+  return mul(zpow(Z, n-!ok, Φ), s, Φ)
+end
+
+
 
 
 #=
 with F[m,k] = 2f1r(1, a+m, 1+σ+a+m+k, z) we already have to use Feq for the
-recursion on k. Outlook not good, but could try using a recursion on m too:
+recursion on k. Could try using a recursion on m too:
   {F[m,0], F[m,1]} = 1/(m+a-1)*M.{F[m-1,0], F[m-1,1]}
 where M = {{1, -1-σ}, {(z-1)/(z*(m+σ+a)), 1/z + (-1-σ)/(m+σ+a)}}
+Since arb's 2f1r is pretty good in this case, the outlook is not so good.
 =#
-function funny_hyp(
+function heuristic_hyp(
   a::Vector{T}, b::Vector{T},
   z::T,
   m::Int, # number of terms for plain sum
@@ -2242,25 +2710,40 @@ function funny_hyp(
   F = parent(a[end])
   Fθ, θ = PolynomialRing(F, "θ")
   Φ += 20
-  eq = [θ*prod(θ-1+i for i in b), -z*prod(θ-1+i for i in a)]
-  plain = sum_bs(m, eq, [one(F)], Φ+10+2*nbits(m))
+
+  Φp = Φ+10+2*nbits(m)
+  S = sum_bs_start(fill(prod(θ-1+i for i in a),1,1), θ*prod(θ-1+i for i in b),
+                   BiElem{T}(z, F), zero(F), 1, m, 1, Φp)
+  plain = add(mul(get_sum(S, Φp)[1,1,1], z, Φp), 1, Φp+60)
+
   Aeq = buehring_equ(a, b, 0, θ)
   if isone(z)
     AFeq = hadamard_product(Aeq, [(θ+σ)*(θ-1+σ+a[end]+m), -(θ-1+σ)])
-    iv = initial_values(AFeq, [F(1)])
-    tail = sum_bs(N, AFeq, iv, Φ+4*length(AFeq)+4*nbits(N))
+    s = length(AFeq)-1
+    iv = initial_values(AFeq, [F(1)], s)
+    Φt = Φ+4*length(AFeq)+4*nbits(N)
+    S = sum_bs_start(reshape([-AFeq[1+i] for i in 1:s],s,1), AFeq[1],
+                     BiElem{T}(one(F), F), zero(F), 1, N, s, Φt)
+    Σa = get_sum(S, Φt)
+    tail = zero(nacb)
+    ivsum = zero(F)
+    for i in 0:s-1
+      add!(ivsum, ivsum, iv[1+s-i-1])
+      add!(tail, tail, mul(Σa[1,1+i,1], iv[1+s-i-1], Φt), Φt)
+    end
+    add!(tail, tail, nacb(ivsum, Φt), Φt)
     mul!(tail, tail, mul(rgamma(σ+a[end]+m, Φ), inv(σ), Φ), Φ)
   else
     Feq = [z*(θ+σ)*(θ-1+σ+a[end]+m), -(θ-1+σ-(1-z)*(2*θ-2+2*σ+a[end]+m)), -Fθ(1-z)]
     AFeq = hadamard_product(Aeq, Feq)
-    iv = initial_values(Aeq, [F(1)], length(AFeq)-1)
+    s = length(AFeq)-1
+    Φt = Φ+4*length(AFeq)+4*nbits(N)
+    iv = initial_values(Aeq, [F(1)], s)
     zz = convert(Complex{Float64}, nacb(z, 60))
     Φ2f1 = Φ + min(Φ, trunc(Int, 0.25*m*nbits(m)*abs(1-zz)))
-    # use Feq to build all initial values iv2 for AFeq
-    # calls 2f1r 2 times instead of 2*q times
-    Fk0 = real(hypergeometric_2f1_regularized(F(1), a[end]+m, 1+σ+a[end]+m+0, z, Φ2f1))
-    Fk1 = real(hypergeometric_2f1_regularized(F(1), a[end]+m, 1+σ+a[end]+m+1, z, Φ2f1))
-    iv2 = narb[mul(Fk0, iv[1+0], Φ), mul(Fk1, iv[1+1], Φ)]
+    Fk0 = hypergeometric_2f1_regularized(F(1), a[end]+m, 1+σ+a[end]+m+0, z, Φ2f1)
+    Fk1 = hypergeometric_2f1_regularized(F(1), a[end]+m, 1+σ+a[end]+m+1, z, Φ2f1)
+    iv2 = nacb[mul(Fk0, iv[1+0], Φ), mul(Fk1, iv[1+1], Φ)]
     M = (F(1), F(0), F(0), F(1))
     for k in 2:length(iv)-1
       f0 = evaluate(Feq[1+0], k)
@@ -2270,9 +2753,18 @@ function funny_hyp(
       Fk = add(mul(Fk1, M[1], Φ), mul(Fk0, M[2], Φ), Φ)
       push!(iv2, mul(Fk, iv[1+k], Φ))
     end
-    tail = sum_bs(N, AFeq, iv2, Φ+4*length(AFeq)+4*nbits(N))
+    S = sum_bs_start(reshape([-AFeq[1+i] for i in 1:s],s,1), AFeq[1],
+                     BiElem{T}(one(F), F), zero(F), 1, N, s, Φt)
+    Σa = get_sum(S, Φt)
+    tail = zero(nacb)
+    ivsum = zero(nacb)
+    for i in 0:s-1
+      add!(ivsum, ivsum, iv2[1+i], Φt)
+      add!(tail, tail, mul(Σa[1,1+s-1-i,1], iv2[1+i], Φt), Φt)
+    end
+    add!(tail, tail, ivsum, Φt)
   end
-  f = mul(pow(narb(z, Φ), UInt(m), Φ), rising_factorial(a[end], m, Φ), Φ)
+  f = mul(pow(nacb(z, Φ), UInt(m), Φ), rising_factorial(a[end], m, Φ), Φ)
   for i in 1:q
     mul!(f, f, div(gamma(b[i], Φ), gamma(a[i], Φ), Φ), Φ)
   end
@@ -3024,7 +3516,7 @@ function tail_bound(Pθ, Px, u, ns, αs, Z::zBranchInfo, δ, N, τ, ν, Φ)
     return Er
   end
 
-  zmag = abs_upper(Z.z, Φ)
+  zmag = abs_upper(get_approx(Z, Φ), Φ)
 
   if (k1 > 0 || k2 > 0) && !isnegative(sub(zmag, 1, Φ))
     # don't know if the series converges
@@ -3266,20 +3758,12 @@ function eval_basis_forward(
 end
 
 
-function overlap_dist(a::Matrix{nacb_poly}, Δ::Matrix{nacb_poly}, b::Matrix{nacb_poly}, τ::Int, Φ::Int)
-  (r, c) = size(a)
-  @assert (r, c) == size(Δ) == size(b)
+function overlap_dist(a::Array{nacb, 3}, Δ::Array{nacb, 3}, b::Array{nacb, 3}, Φ::Int)
+  (m, n, τ) = size(a)
+  @assert (m, n, τ) == size(Δ) == size(b)
   dist = 0
-  for i in 1:r, j in 1:c
-    dist = max(dist, overlap_dist(a[i,j], Δ[i,j], b[i,j], τ, Φ))
-  end
-  return dist
-end
-
-function overlap_dist(a::nacb_poly, Δ::nacb_poly, b::nacb_poly, τ::Int, Φ::Int)
-  dist = 0
-  for i in 0:τ-1
-    dist = max(dist, overlap_dist(coeff(a, i), coeff(Δ, i), coeff(b, i), Φ))
+  for i in 1:m, j in 1:n, k in 1:τ
+    dist = max(dist, overlap_dist(a[i,j,k], Δ[i,j,k], b[i,j,k], Φ))
   end
   return dist
 end
@@ -3327,6 +3811,7 @@ function eval_basis_bs(
   Fθ = parent(Pθ[1])
   θ = gen(Fθ)
   F = base_ring(Fθ)
+  @assert T == elem_type(F)
 
   # u is an array of the last s solutions
   # each solution is an array of coefficients of log^k(z)/k!  0 <= k < τ
@@ -3345,7 +3830,7 @@ function eval_basis_bs(
 
   N = 0
   N0 = -1
-  uN0 = [zero(nacb_poly) for i in 1:s, j in 1:ν]
+  uN0::Array{nacb, 3} = [zero(nacb) for i in 1:s, j in 1:ν, k in 1:1]
   M0 = nacb_mat(δ, ν)
 
   while true
@@ -3379,12 +3864,18 @@ function eval_basis_bs(
 
     if isempty(ns) && N≥δ
       # for u_{N0-1},...,u_{N0-s}, map the 3D array u of F elem's
-      # into 2D array uN0 of poly's in Λ
+      # into 2D array uN0 of poly's in Λ (it‘s still 3D)
       N0 = N
+      if τ != 1
+        uN0 = [zero(nacb) for i in 1:s, j in 1:ν, k in 1:τ]
+      end
       for i in 1:s, l in 1:ν
-        zero!(uN0[i,l])
-        for j in 0:min(τ,length(u[i]))-1
-          setcoeff!(uN0[i,l], τ-1-j, nacb(u[i][1+j][l], Φ))
+        for j in 0:τ-1
+          if j < length(u[i])
+            uN0[i,l,1+τ-1-j] = nacb(u[i][1+j][l], Φ)
+          else
+            uN0[i,l,1+τ-1-j] = zero(nacb)
+          end
         end
       end
       break
@@ -3411,52 +3902,49 @@ function eval_basis_bs(
   @assert τ>0
   @assert N0≥δ
   N1 = N0+10
-  sm1, uM = sum_bs_diff(numeq, den, Z.z, Z.λ, δ, N1, N0, Φ)
-
+  S = sum_bs_start(numeq, den, Z.biz, Z.λ, δ, N1, N0, Φ)
   overlap_count = 0
   d1 = Φ
   NΔ = N1
   while N1 < maxN
     N2 = N1 + clamp(NΔ, fld(N1+100,64), N1)
-    sm2, uM, Δ = sum_bs_diff_continue(numeq, den, Z.z, Z.λ, δ, N2, N1, N0, sm1, uM, Φ)
-    d2 = overlap_dist(sm1, Δ, sm2, τ, Φ)
-#@show (N0, N1, d2, Φ)
+    d2 = sum_bs_continue(S, N2, Φ)
     if d2 < 1
-      if (overlap_count+=1) > 1
-        (sm1, N1, d1) = (sm2, N2, d2)
-        break
-      end
+      overlap_count += 1
       NΔ = 10
     else
       overlap_count = 0
-      if d1-d2 <= 0
-        NΔ = N2
-      else
-        NΔ = trunc(Int, (N2-N1)*0.25*(d2/(d1-d2)))
-      end
+      NΔ = d1-d2 <= 0 ? N1 : trunc(Int, (N2-N1)*0.25*(d2/(d1-d2)))
     end
-    (sm1, N1, d1) = (sm2, N2, d2)
+    N1 = N2
+    overlap_count < 2 || break
   end
 
   # accumulate sums for [N0, N1) and add to sum for [0,N0)
+  Σ1a = get_sum(S, Φ)
+  fdz = [zero(nacb) for k in 1:τ]
   for d in 0:δ-1, l in 1:ν
     # fdz = z^(d-N0-λ)*f^(d)(z) for the l^th initial value
-    fdz = zero(nacb_poly)
-    for i in 1:s
-      add!(fdz, fdz, mullow(sm1[1+d,i], uN0[i,l], τ, Φ), Φ)
+    for i in 1:s, k in 0:τ-1, h in 0:k
+      if i == 1 && h == 0
+        mul!(fdz[1+k], Σ1a[1+d,i,1+h], uN0[i,l,1+k-h], Φ)
+      else
+        mul!(t, Σ1a[1+d,i,1+h], uN0[i,l,1+k-h], Φ)
+        add!(fdz[1+k], fdz[1+k], t, Φ)
+      end
     end
-    M[1+d,l] = add(M[1+d,l], zpowlogpoly_eval(Z, N0-d, fdz, τ, Φ), Φ)
+    M[1+d,l] = add(M[1+d,l], zpowlogpoly_eval(Z, N0-d, fdz, Φ), Φ)
   end
 
   # compute u_{N1-1},...,u_{N1-s}
-  uN1 = mul(uM, uN0, τ, Φ)
-  uN1t = nacb[coeff(uN1[i,l], τ-j) for i in 1:s, j in 1:τ, l in 1:ν]
+  uN1 = mullow(get_approx(S.M, Φ), uN0, Φ)
+  uN1t = nacb[uN1[i,l,1+τ-j] for i in 1:s, j in 1:τ, l in 1:ν]
 
   # bound sum for [N1, ∞) and add to sum for [0,N1)
   Er = tail_bound(Pθ, Px, uN1t, ns, αs, Z, δ, N1, τ, ν, Φ)
   for d in 0:δ-1, l in 1:ν
     getindex!(t, M, 1+d,l)
-    add_error!(t, mul(coeff(Er[l], d), factorial(d, Φ), Φ))
+    add_error!(t, mul(coeff(Er[l], d), factorial(ZZ(d)), Φ))
     setindex!(M, t, 1+d,l)
   end
 
@@ -3476,17 +3964,18 @@ function eval_basis(
   δ::Int,                 # calculate f(z), f'(z), ... f^(δ-1)(z)
   Φ::Int) where T         # precision
 
-#  M1 = eval_basis_forward(Pθ, Px, Z, ns, αs, δ, Φ)
-  M2 = eval_basis_bs(Pθ, Px, Z, ns, αs, δ, Φ)
-
-#  for i in 1:δ, j in 1:length(ns)
-#    @assert overlaps(M1[i,j], M2[i,j])
-#  end
-  return M2
+  M1 = eval_basis_bs(Pθ, Px, Z, ns, αs, δ, Φ)
+  if @debug()
+    M2 = eval_basis_forward(Pθ, Px, Z, ns, αs, δ, Φ)
+    for i in 1:δ, j in 1:length(ns)
+      @assert overlaps(M1[i,j], M2[i,j])
+    end
+  end
+  return M1
 end
 
 
-function eval_bases(Pθ, Px, z::nacb, ρ, αs::Vector{T}, δ, Φ) where T
+function eval_bases(Pθ, Px, z, ρ, αs::Vector{T}, δ, Φ) where T
   M = eval_basis(Pθ, Px, zBranchInfo{T}(ρ[1][1], z), ρ[1][2], αs, δ, Φ)
   for i in 2:length(ρ)
     M = hcat(M, eval_basis(Pθ, Px, zBranchInfo{T}(ρ[i][1], z), ρ[i][2], αs, δ, Φ))
@@ -3718,17 +4207,10 @@ function hyp_initial_values_at_∞(
         s = mullow(s, s2, ord, p)
       end
       # now determine r[1+j], ..., r[1+j+μ-1]. They are already zeroed.
+      f = (iseven(t) ? 1 : -1)//factorial(t)
       for i in 0:min(ord, μ)-1
-        f = 1//factorial(t) # TODO
-        if i > 0
-          f *= ZZ(k)^i//factorial(ZZ(i))
-        end
-        ff = mul(coeff(s, ord-1-i), f, p)
-        if iseven(t)
-          add!(r[1+j+i], r[1+j+i], ff, p)
-        else
-          sub!(r[1+j+i], r[1+j+i], ff, p)
-        end
+        add!(r[1+j+i], r[1+j+i], mul(coeff(s, ord-1-i), f, p), p)
+        mul!(f, f, k)
       end
     end
     j += μ
@@ -3793,17 +4275,75 @@ function buehring_equ(a::Vector{T}, b::Vector{T}, s::Int, θ) where T
   return eq
 end
 
+function const_euler_gamma(p::Int)
+  z = narb()
+  ccall((:arb_const_euler, libarb), Nothing,
+        (Ref{narb}, Int),
+        z, p)
+  return z
+end
+
+function rgamma_jet2(a::T, p::Int) where T
+  z = rgamma_series(nacb(a, p), 1, 2, p)
+  return (coeff(z,0), coeff(z,1))
+end
+
+function rising_factorial_jet2(a::T, n::fmpz, p::Int) where T
+  z = rising_factorial_series(nacb(a, p), 1, n, 2, p)
+  return (coeff(z,0), coeff(z,1))
+end
+
+
+# for intcase
+function _hyp2f1_initial_values_at_1!(iv::nacb_mat, a::T, b::T, c::T, σ::fmpz, Φ::Int) where T
+  r1 = const_euler_gamma(Φ)
+  rσa0, rσa1 = rgamma_jet2(σ+a, Φ)
+  rσb0, rσb1 = rgamma_jet2(σ+b, Φ)
+  c0 = mul(rσa0, rσb0, Φ)
+  c1 = add(mul(rσa1, rσb0, Φ), mul(rσa0, rσb1, Φ), Φ)
+  if iszero(σ)
+    iv2 = neg(c0)
+    iv1 = sub(c1, mul(ldexp!(c0, c0, 1), r1, Φ), Φ)
+  else
+    rab = mul(rgamma(a, Φ), rgamma(b, Φ), Φ)
+    if σ > 0
+      iv1 = mul(c0, factorial(σ-1), Φ)
+      rσ0, rσ1 = rgamma_jet2(1+σ, Φ)
+      fσa = rising_factorial(a, σ, Φ)
+      fσb = rising_factorial(b, σ, Φ)
+      t = sub(mul(c0, r1, Φ), c1, Φ)
+      iv2 = add(mul(rσ1, rab, Φ), mul(mul(rσ0, t, Φ), mul(fσa, fσb, Φ), Φ), Φ)
+    else; @assert σ < 0
+      iv1 = mul(rab, factorial(-1-σ), Φ)
+      rσ0, rσ1 = rgamma_jet2(1-σ, Φ)
+      fσa0, fσa1 = rising_factorial_jet2(σ+a, -σ, Φ)
+      fσb0, fσb1 = rising_factorial_jet2(σ+b, -σ, Φ)
+      t = add(add(mul(fσa1, fσb0, Φ), mul(fσa0, fσb1, Φ), Φ), mul(mul(fσa0, fσb0, Φ), r1, Φ), Φ)
+      t = mul(t, mul(rσ0, rab, Φ), Φ)
+      iv2 = sub(add(t, mul(rσ1, c0, Φ), Φ), mul(rσ0, c1, Φ), Φ)
+    end
+    if iseven(σ)
+      neg!(iv2)
+    end
+  end
+  Γc = gamma(c, Φ)
+  iv[1,1] = mul(iv1, Γc, Φ)
+  iv[2,1] = mul(iv2, Γc, Φ)
+  return iv
+end
+
+# in the case of non-integral σ, output its iv first
 function hyp_initial_values_at_1(
   a::Vector{T}, b::Vector{T},
-  p::Int,
+  Φ::Int,
   succ_method::Bool) where T
 
   q = length(b)
   @assert length(a) == q+1
   σ::T = sum(b) - sum(a)
-  p += 20
-  m = trunc(Int, p+q)
-  N = trunc(Int, p+q)
+  Φ += 20
+  m = trunc(Int, Φ+q)
+  N = trunc(Int, Φ+q)
   iv = nacb_mat(q+1, 1)
 
   if q < 1
@@ -3811,68 +4351,70 @@ function hyp_initial_values_at_1(
     return iv
   end
 
-  if isinteger_with_integer(σ)[1]
-    @assert false
+  intcase, ZZσ = isinteger_with_integer(σ)
+  if intcase
+    @assert q == 1 # q > 1 not implemented too messy
+    _hyp2f1_initial_values_at_1!(iv, a[1], a[2], b[1], ZZσ, Φ)
     return iv
   end
 
-  Γb1 = gamma(b[1], p)
-  Γmσ = gamma(-σ, p)
+  Γb1 = gamma(b[1], Φ)
+  Γmσ = gamma(-σ, Φ)
 
-  Γboa = div(Γb1, gamma(a[1], p), p)
+  Γboa = div(Γb1, gamma(a[1], Φ), Φ)
   for i in 2:q
-    mul!(Γboa, Γboa, div(gamma(b[i], p), gamma(a[i], p), p), p)
+    mul!(Γboa, Γboa, div(gamma(b[i], Φ), gamma(a[i], Φ), Φ), Φ)
   end
 
   # u0
-  iv[1,1] = nacb(mul(div(Γmσ, gamma(a[end], p), p), Γboa, p))
+  iv[1,1] = mul(div(Γmσ, gamma(a[end], Φ), Φ), Γboa, Φ)
   if q == 1
-    t = div(Γb1, Γmσ, p)
-    t = mul(t, div(neg!(pi!(narb(), p)), mul(sin_pi(σ, p), σ, p), p), p)
-    iv[1,2] = nacb(mul(t, mul(rgamma(b[1]-a[1], p), rgamma(b[1]-a[2], p), p), p))
+    t = div(Γb1, Γmσ, Φ)
+    t = mul(t, div(neg!(pi!(narb(), Φ)), mul(sin_pi(σ, Φ), σ, Φ), Φ), Φ)
+    iv[1,2] = mul(t, mul(rgamma(b[1]-a[1], Φ), rgamma(b[1]-a[2], Φ), Φ), Φ)
     return iv
   end
 
-  Γfac = mul(Γboa, div(rising_factorial(a[end], m, p), gamma(σ+a[end]+m, p), p), p)
+  Γfac = mul(Γboa, div(rising_factorial(a[end], m, Φ), gamma(σ+a[end]+m, Φ), Φ), Φ)
 
   F = parent(a[end])
   Fθ, θ = PolynomialRing(F, "θ")
 
-  # the plain terms
-  peq = elem_type(Fθ)[zero(Fθ) for j in 1:1, i in 1:1]
-  peq[1,1] = prod(θ-1+ai for ai in a)
-  peqden = θ*prod(θ-1+bi for bi in b)
-  plain_der, _ = sum_bs_diff(peq, peqden, one(nacb), F(0), q, m, 1, p+4*nbits(m))
-  add!(plain_der[1,1], plain_der[1,1], 1, p+60)
+  # the sum of the first m terms of the defining series
+  Φp = Φ+4*nbits(m)
+  S = sum_bs_start(fill(prod(θ-1+ai for ai in a),1,1), θ*prod(θ-1+bi for bi in b),
+                   BiElem{T}(one(F), F), zero(F), q, m, 1, Φp)
+  plain = get_sum(S, Φp)
+  add!(plain[1,1,1], plain[1,1,1], 1, Φp)
 
   # the vi coeffs
   if succ_method
     for i in 0:q-1
       Aeq = buehring_equ(a, b, i, θ)
       eq = hadamard_product(Aeq, [(θ+σ-i)*(θ-1+σ+a[end]+m-i), -(θ-1+σ-i)])
-      tail = sum_bs(N, eq, initial_values(eq, [F(1)]), p+length(eq)+4*nbits(N))
-      i==0 || mul!(Γfac, Γfac, σ-i+a[end]+m, p)
-      t2 = mul(mul(Γfac, inv(σ-i), p), tail, p)
-      t1 = coeff(plain_der[1+i,1],0)
-      iv[2+i,1] = div(add(t1, t2, p), (-1)^i*factorial(ZZ(i)), p)
+      tail = sum_bs(N, eq, initial_values(eq, [F(1)]), Φ+length(eq)+4*nbits(N))
+      i==0 || mul!(Γfac, Γfac, σ-i+a[end]+m, Φ)
+      t2 = mul(mul(Γfac, inv(σ-i), Φ), tail, Φ)
+      t1 = plain[1+i,1,1]
+      iv[2+i,1] = div(add(t1, t2, Φ), (-1)^i*factorial(ZZ(i)), Φ)
     end
   else
     Aeq = buehring_equ(a, b, 0, θ)
     S = [zero(narb) for i in 0:q-1]
     for j in 0:q-1
       eq = hadamard_product(Aeq, [(θ+σ)*(θ-1+σ+a[end]+m), -(θ-1-j+σ)])
-      S[1+j] = sum_bs(N, eq, initial_values(eq, [F(1)]), p+length(eq)+4*nbits(N))
+      S[1+j] = sum_bs(N, eq, initial_values(eq, [F(1)]), Φ+length(eq)+4*nbits(N))
     end
     for i in 0:q-1
       tf = inv(σ)
       tail = zero(narb)
       for j in 0:i
-        add!(tail, tail, mul(S[1+j], (-1)^(i-j)*binomial(fmpz(m),fmpz(i-j))*tf, p), p)
+        add!(tail, tail, mul(S[1+j], (-1)^(i-j)*binomial(fmpz(m),fmpz(i-j))*tf, Φ), Φ)
         tf *= (a[end]+m+j)//(1+j-σ)
       end
-      t2 = mul(tail, Γfac, p)
-      t1 = div(coeff(plain_der[1+i],0), (-1)^i*factorial(ZZ(i)), p)
-      iv[2+i,1] = add(t1, t2, p)
+      t2 = mul(tail, Γfac, Φ)
+      t1 = div(plain[1+i,1,1], (-1)^i*factorial(ZZ(i)), Φ)
+      iv[2+i,1] = add(t1, t2, Φ)
     end
   end
   return iv
@@ -3881,11 +4423,11 @@ end
 
 function compute_f_near_1(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   p += 20
-#@time begin
   n = length(a)
+  @assert n-1 == length(b)
   F = parent(a[1])
   Fx, x = PolynomialRing(F, "x")
-  w = nacb(QQ(3//4), p)
+  w = F(3//4)
   # 0 -> w
   Pθ, Px = hyp_equ(a, b, Fx(0)//Fx(1), x//Fx(1))
   αs = push!(F(1) .- b, F(0))
@@ -3896,10 +4438,10 @@ function compute_f_near_1(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   # roots of indicial equation are 0:n-2 and σ
   σ::T = sum(b) - sum(a)
   αs = push!(F.(0:n-2), σ)
-  ok, ZZσ = isinteger_with_integer(σ)
+  intcase, ZZσ = isinteger_with_integer(σ)
   if n < 2
     ρ = [(σ, [ZZ(0)])]
-  elseif ok
+  elseif intcase
     roots = sort!(push!(ZZ.(0:n-2), ZZσ))
     ρ = [(F(roots[1]), roots .- roots[1])]
   else
@@ -3907,15 +4449,16 @@ function compute_f_near_1(a::Vector{T}, b::Vector{T}, z::nacb, p::Int) where T
   end
   # 1 -> w and 1 -> z
   Pθ, Px = hyp_equ(a, b, Fx(0)//Fx(1), (1-x)//Fx(1))
-  e2 = eval_bases(Pθ, Px, sub(1, w, p+60), ρ, αs, n, p)
+  e2 = eval_bases(Pθ, Px, 1-w, ρ, αs, n, p)
   # 0 -> w -> 1 -> z
   sol = solve(e2, e0, p)
-#end
-  if false && !ok
+  if @debug() && (length(b) < 2 || !intcase)
     sol2 = hyp_initial_values_at_1(a, b, p, false)
-    sol3 = hyp_initial_values_at_1(a, b, p, true)
     for i in 1:length(a)
       @assert overlaps(sol2[i,1], sol[i,1])
+    end
+    sol3 = hyp_initial_values_at_1(a, b, p, true)
+    for i in 1:length(a)
       @assert overlaps(sol3[i,1], sol[i,1])
     end
   end
@@ -3993,6 +4536,17 @@ function run_tests()
 println()
 println("***************************** tests *********************************")
 
+if @debug()
+  @testset "initial values" begin
+    CC = AcbField(100)
+    for z in [CC(99//100), CC(101//100)], c in 1:5, k in 1:5
+      @test isfinite(hypergeometric_pfq([1//3,2//3],[c],z))
+      @test isfinite(hypergeometric_pfq([k+1//3,2//3],[c],z))
+      @test isfinite(hypergeometric_pfq([1//3,k+2//3],[c],z))
+    end
+  end
+end
+
 @testset "singular points" begin
   CC = AcbField(53)
 
@@ -4058,13 +4612,13 @@ end
   i = onei(CC)
   ipi = const_pi(CC)*i
 
-  for m in [CC(2//3)]
+  for m in [CC(1//10), CC(2//3), CC(9//10)]
     f1 = hypergeometric_pfq([1//3,2//3],[1],m)
     f2 = hypergeometric_pfq([1//3,2//3],[1],1-m)
     f3 = hypergeometric_pfq([5//6,6//6,7//6],[3//2,3//2],1-m)
-    τ = (CC(-1//3))^(1//2)*f2/f1
-    z = (2 + 3*τ)/4 - (1-m)^(1//2)*f3/(6*ipi*f1)
-    @test overlaps(-θ3(z,2*τ)*θ3(z,6*τ), exp(2*ipi*τ)*θ3(z+τ,2*τ)*θ3(z-3*τ,6*τ))
+    τ = sqrt(CC(-1//3))*f2/f1
+    z = (2 + 3*τ)/4 - sqrt(1-m)*f3/(6*ipi*f1)
+    @test contains_zero(θ3(z,2*τ)*θ3(z,6*τ) + exp(2*ipi*τ)*θ3(z+τ,2*τ)*θ3(z-3*τ,6*τ))
   end
 
   for j in [CC(10000//3), CC(10//3)]
@@ -4072,8 +4626,8 @@ end
     f2 = hypergeometric_pfq([1//12,5//12],[1//2],1-1728/j)
     f3 = hypergeometric_pfq([1//3,2//3,1],[3//4,5//4],1-1728/j)
     τ = i*(2*gamma(1//2,CC)/gamma(7//12,CC)/gamma(11//12,CC)*f2/f1 - 1)
-    z = (1 + τ)/2 + (CC(2//3))^(1//2)/ipi*(1-1728/j)^(1//4)*f3/f1
-    @test overlaps(zero(CC), ellipwp(z, τ))
+    z = (1 + τ)/2 + sqrt(CC(2//3))/ipi*(1-1728/j)^(1//4)*f3/f1
+    @test contains_zero(ellipwp(z, τ))
   end
 end
 
@@ -4088,9 +4642,17 @@ end
 @testset "divergent case" begin
   CC = AcbField(100)
 
-  # check that 0! - 1! + 2! - 3! + ... is supposed to be around 0.59
+  # 0! - 1! + 2! - 3! + ... = 0.59...
   @test overlaps(hypergeometric_pfq([1,1],[],CC(-1)),
                  CC("[0.59634736232319407434107849937 +/- 2.01e-30]"))
+
+  # 0!^2 - 1!^2 + 2!^2 - 3!^2 + ... = 0.66...
+  @test overlaps(hypergeometric_pfq([1,1,1],[],CC(-1)),
+                 CC("[0.66809132637777776543301498750 +/- 1.58e-30]"))
+
+  # 0!^3 - 1!^3 + 2!^3 - 3!^3 + ... = 0.72...
+  @test overlaps(hypergeometric_pfq([1,1,1,1],[],CC(-1)),
+                 CC("[0.72374994418155305222032415740 +/- 5.33e-30]"))
 end
 
 end
@@ -4099,9 +4661,9 @@ function run_bench(a, b, z, p, fx = "", fy = "")
 
   A = map(QQ, a)
   B = map(QQ, b)
-  println(" --------  $A  $B  $z  $p digits  -----------")
+  println("---- $A $B $z digits=$p ----")
 
-  p = trunc(Int, p*3.322)                     
+  p = trunc(Int, p*3.322)
   zz = nacb(narb(QQ(real(z)), p), narb(QQ(imag(z)), p))
   @time f = compute_pfq(A, B, zz, p)
   @assert isempty(fx) || overlaps(set!(narb(), fx, p), real(f))
@@ -4151,27 +4713,28 @@ end
 function run_heuristics()
 println()
 println("************************** heuristics *******************************")
-
-  d = 50
-  while d <= 1600
-    for z in [1, 1-1//50]
-
+  for (z, limit) in [(1, 50000), (1-1//50, 11000)]
+    d = 10
+    while (d = 2*d) <= limit
       m = trunc(Int, d*4.0)
       N = trunc(Int, d*1.0)
       p = trunc(Int, d*3.322)
       println()
       println("--------- $d digits, z = $z ----------")
 
-      @time s1 = funny_hyp(map(QQ,[1//2,1//3,1//4,3//5]),
-                           map(QQ, [11//7,7//6,1//8]), QQ(z),
-                           m, N, p)
-      @time s2 = nacb(hypergeometric_pfq([1//2,1//3,1//4,3//5],
-                                         [11//7,7//6,1//8], AcbField(p)(z)))
-      if !overlaps(s1, real(s2))
-        println("oops: ", sub(s1, real(s2), p+100))
+      @time s1 = heuristic_hyp(map(QQ,[1//2,1//3,1//4,3//5]),
+                               map(QQ, [11//7,7//6,1//8]), QQ(z),
+                               m, N, p)
+
+      @time s2 = hypergeometric_pfq([1//2,1//3,1//4,3//5],
+                                    [11//7,7//6,1//8], AcbField(p)(z))
+      s2 = nacb(s2)
+      @show sub(s1, s2, p+60)
+      if !overlaps(s1, s2)
+        println("oops: ", sub(s2, s1, p+100))
+        error("bad answer")
       end
     end
-    d = 2*d
   end
 end
 
