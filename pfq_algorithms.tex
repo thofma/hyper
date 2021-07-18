@@ -56,7 +56,23 @@ The formal series is divergent except for zero argument or terminating parameter
 \begin{equation*}
 \F{p}{q}{\bold{a}}{\bold{b}}{z} = \sum_{i=1}^{p} \frac{\Gamma(\bold{b}) \Gamma(\hat{\bold{a}}_i-a_i)}{\Gamma(\bold{b}-a_i) \Gamma(\hat{\bold{a}}_i)} (-z)^{-a_i} \F{q+1}{p-1}{a_i,1+a_i-\bold{b}}{1+a_i-\hat{\bold{a}}_i}{\frac{(-1)^{p-q-1}}{z}}
 \end{equation*}
-The series on the right are convergent. The difficulty here is when $|z|$ is so small that the convergent series on the right hand side cannot be summed. In this case, a direct evaluation of the Laplace integral defining the Borel sum should be preferred.
+The series on the right are convergent.
+
+The difficulty here is when $|z|$ is so small that the convergent series on the right hand side cannot be summed. In this case, a direct evaluation of the Laplace integral defining the Borel sum should be preferred. This proceeds
+as follows. For any ``direction'' $\omega$ with $\Re(\omega) > 0$, we have
+\begin{equation*}
+k! = \int_0^{\infty} e^{-\omega t} (\omega t)^k \omega dt
+\end{equation*}
+Divide each term of \eqref{Fdef} by $((p-q-1)n)!$ to obtain the convergent series
+\begin{equation*}
+f(x) := \sum_{n=0}^{\infty} \frac{1}{((p-q-1)n)!}\frac{(\bold{a})_n}{(\bold{b})_n}\text{.} \frac{x^n}{n!}
+\end{equation*}
+Then, at least formally, with $k = (p-q-1)n$, we have
+\begin{equation*}
+\F{p}{q}{\bold{a}}{\bold{b}}{z} = \int_{0}^{\infty} e^{-\omega t} f(z(\omega t)^{p-q-1}) \omega dt \text{,}
+\end{equation*}
+and $\omega$ must be chosen so that the integrand does not hit the singularity of $f(x)$ at $x = (p-q-1)^{p-q-1}$.
+
 
 \section{The case $p=q+1$}
 
@@ -355,7 +371,13 @@ z \frac{\partial}{\partial z} \frac{z^i}{(1-z^2)^k}, \quad
 z \frac{\partial}{\partial z} \log \left( \frac{1}{1-z^2} \right), \quad
 z \frac{\partial}{\partial z} \log \left( \frac{1+z}{1-z} \right),
 \end{gather*}
-all with nonnegative coefficients as power series in $z$. The coefficients of the linear combination, say $f_j(\theta)$, will be polynomials in $\theta$. Bounding the combinations
+all with nonnegative coefficients as power series in $z$.
+
+\begin{remark}
+This is not accurate for equations arising from Borel resummation, where the list needs to be augmented by ?.
+\end{remark}
+
+The coefficients of the linear combination, say $f_j(\theta)$, will be polynomials in $\theta$. Bounding the combinations
 \begin{equation*}
 n \sum_{t=0}^{\tau(n) - 1} \left| [X^t] \frac{f_j(\lambda+n+X)}{X^{-\mu(\lambda+n)} Q_0(\lambda+n+X)} \right|
 \end{equation*}
@@ -438,8 +460,4 @@ For fixed $\delta$ we have
 \end{equation*}
 for certain polynomials $c_{j,k}$ of degree $j$ satisfying $c_{j+1,k} = \log(z) c_{j,k} + \sum_{\ell=1}^{k} (-1)^{\ell-1}c_{k-\ell}/\ell$.
 
-
-
 \end{document}
-
-

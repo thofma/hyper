@@ -9,6 +9,11 @@ macro debug()
   return false
 end
 
+macro use_tail_bounds()
+  return false
+end
+
+
 const ARF_PREC_EXACT = typemax(Int)
 
 function precision(R::AcbField)
@@ -1588,20 +1593,33 @@ function isinteger_with_integer(x::fmpq)
 end
 
 # ball approximation
-function narb(x::fmpq, p::Int)
-  z = narb()
+function narb!(z::narb, a::fmpq, Φ::Int)
   ccall((:arb_set_fmpq, libarb), Nothing,
         (Ref{narb}, Ref{fmpq}, Int),
-        z, x, p)
+        z, a, Φ)
   return z
 end
 
-function nacb(x::fmpq, p::Int)
-  z = nacb()
+function narb(x::fmpq, Φ::Int)
+  return narb!(narb(), x, Φ)
+end
+
+function nacb!(z::nacb, a::fmpz, Φ::Int)
+  ccall((:acb_set_round_fmpz, libarb), Nothing,
+        (Ref{nacb}, Ref{fmpz}, Int),
+        z, a, Φ)
+  return z
+end
+
+function nacb!(z::nacb, a::fmpq, Φ::Int)
   ccall((:acb_set_fmpq, libarb), Nothing,
         (Ref{nacb}, Ref{fmpq}, Int),
-        z, x, p)
+        z, a, Φ)
   return z
+end
+
+function nacb(x::fmpq, Φ::Int)
+  return nacb!(nacb(), x, Φ)
 end
 
 function sin_pi(a::fmpq, p::Int)
@@ -1825,36 +1843,98 @@ function force_approx(z::BiFrac, Φ::Int)
   z.approx = div(nacb(z.num, Φ), nacb(z.den, Φ), Φ)
 end
 
-function get_approx(z::BiMatrix, Φ::Int)
+function _get_approx(z::BiMatrix, Φ::Int, t1::nacb, t2::nacb)
   if !z.haveapprox
     z.haveapprox = true
     (m, n, τ) = size(z.num)
-    den = nacb(z.den, Φ)
+    nacb!(t2, z.den, Φ)
     for i in 1:m, j in 1:n, k in 1:τ
-      z.approx[i,j,k] = div(nacb(z.num[i,j,k], Φ), den, Φ)
+      nacb!(t1, z.num[i,j,k], Φ)
+      div!(z.approx[i,j,k], t1, t2, Φ)
     end
   end
   return z.approx
 end
 
-function force_approx(z::BiMatrix, Φ::Int)
+function get_approx(z::BiMatrix, Φ::Int)
+  return _get_approx(z, Φ, nacb(), nacb())
+end
+
+function force_approx(z::BiMatrix, Φ::Int, t1::nacb, t2::nacb)
   z.isexact || return
   z.isexact = false
-  get_approx(z, Φ)
+  _get_approx(z, Φ, t1, t2)
 end
 
 
-function limit_prec(r::BiMatrix, Φ::Int)
+function limit_prec(r::BiMatrix, Φ::Int, t1::nacb, t2::nacb)
   r.isexact || return
   if nbits(r.den) > Φ
-    force_approx(r, Φ)
+    force_approx(r, Φ, t1, t2)
     return
   end
   (m, n, τ) = size(r.num)
   for i in 1:m, j in 1:n, k in 1:τ
     if nbits(r.num[i,j,k]) > Φ
-      force_approx(r, Φ)
+      force_approx(r, Φ, t1, t2)
       return
+    end
+  end
+end
+
+
+function mullow!(
+  z::BiMatrix{T},
+  a::BiMatrix{T},
+  b::BiMatrix{T},
+  Φ::Int,
+  t1::nacb, t2::nacb) where {T}
+
+  (m, p, τ) = size(a.num)
+  (p2, n, τ2) = size(b.num)
+  @assert p == p2 && τ == τ2
+
+  F = parent(a.num[1,1,1])
+
+  if a.isexact && b.isexact
+    z.isexact = true
+    z.haveapprox = false
+    mul!(z.den, a.den, b.den)
+    znum = z.num
+    for i in 1:m, j in 1:n, k in 1:τ
+      zero!(znum[i,j,k])
+    end
+    for i in 1:m, j in 1:n, h in 1:p, k in 0:τ-1, l in 0:k
+      addmul!(znum[i,j,1+k], a.num[i,h,1+l], b.num[h,j,1+k-l])
+    end
+    return
+  end
+
+  z.isexact = false
+  z.haveapprox = true
+  zapprox = z.approx
+  for i in 1:m, j in 1:n, k in 1:τ
+    zero!(zapprox[i,j,k])
+  end
+
+  if !a.isexact && !b.isexact
+    mullow!(zapprox, a.approx, b.approx, Φ, t1)
+  else
+    if !a.isexact && b.isexact
+      for i in 1:m, j in 1:n, h in 1:p, k in 0:τ-1, l in 0:k
+        mul!(t1, a.approx[i,h,1+l], b.num[h,j,1+k-l], Φ)
+        add!(zapprox[i,j,1+k], zapprox[i,j,1+k], t1, Φ)
+      end
+      nacb!(t2, b.den, Φ)
+    else
+      for i in 1:m, j in 1:n, h in 1:p, k in 0:τ-1, l in 0:k
+        mul!(t1, b.approx[h,j,1+k-l], a.num[i,h,1+l], Φ)
+        add!(zapprox[i,j,1+k], zapprox[i,j,1+k], t1, Φ)
+      end
+      nacb!(t2, a.den, Φ)
+    end
+    for i in 1:m, j in 1:n, h in 1:τ
+      div!(zapprox[i,j,h], zapprox[i,j,h], t2, Φ)
     end
   end
 end
@@ -1899,11 +1979,10 @@ function mullow(a::BiMatrix{T}, b::BiMatrix{T}, Φ::Int) where {T}
   return BiMatrix{T}(false, true, znum, zero(F), zapprox)
 end
 
-function mullow!(z::Array{nacb, 3}, a::Array{nacb, 3}, b::Array{nacb, 3}, Φ)
+function mullow!(z::Array{nacb, 3}, a::Array{nacb, 3}, b::Array{nacb, 3}, Φ, t::nacb)
   (m, p, τ) = size(a)
   (p2, n, τ2) = size(b)
   @assert p == p2 && τ == τ2
-  t = nacb()
   for i in 1:m, j in 1:n, h in 1:p, k in 0:τ-1, l in 0:k
     mul!(t, a[i,h,1+l], b[h,j,1+k-l], Φ)
     add!(z[i,j,1+k], z[i,j,1+k], t, Φ)
@@ -1915,7 +1994,7 @@ function mullow(a::Array{nacb, 3}, b::Array{nacb, 3}, Φ)
   (m, p, τ) = size(a)
   (p2, n, τ2) = size(b)
   @assert p == p2 && τ == τ2
-  return mullow!([zero(nacb) for i in 1:m, j in 1:n, k in 1:τ], a, b, Φ)
+  return mullow!([zero(nacb) for i in 1:m, j in 1:n, k in 1:τ], a, b, Φ, nacb())
 end
 
 function mul!(z::Array{nacb, 3}, a::nacb, Φ::Int)
@@ -1974,20 +2053,87 @@ end
 
 
 
-mutable struct SumBsCtx{ZT, PZT}
-  N0::Int
-  N1::Int
-  eqnum::Matrix{PZT}
-  eqden::PZT
+mutable struct SumBsCtx{ZT}
+  s::Int
+  τ::Int
+  δ::Int
+  eqnum::Matrix{Vector{ZT}}
+  eqden::Vector{ZT}
   z::BiFrac{ZT}
   λnum::ZT
   λden::ZT
-  Σcurr::BiMatrix{ZT}
-  Σprev::BiMatrix{ZT}
-  Δ::BiMatrix{ZT}
+  Σ::BiMatrix{ZT}
   M::BiMatrix{ZT}
+  Δ::BiMatrix{ZT}
+  Σ0::BiMatrix{ZT}
+  M0::BiMatrix{ZT}
+  # temp space
+  tmatrix::Vector{Tuple{BiMatrix{ZT}, BiMatrix{ZT}}}
+  tnumeval::Matrix{ZT}
+  tdeneval::ZT
+  tff::Vector{ZT}
+  t1::ZT
+  t2::ZT
+  t3::ZT
+  tzn::ZT
+  tzd::ZT
+  ta::nacb
+  ta1::nacb
+  ta2::nacb
 end
 
+function get_sum(S::SumBsCtx, Φ::Int)
+  return get_approx(S.Σ, Φ)
+end
+
+function push_tmatrix(S::SumBsCtx, a)
+  push!(S.tmatrix, a)
+end
+
+function pop_tmatrix(S::SumBsCtx{ZT}) where {ZT}
+  if isempty(S.tmatrix)
+    return (BiMatrix{ZT}(S.δ, S.s, S.τ, parent(S.λnum)),
+            BiMatrix{ZT}(S.s, S.s, S.τ, parent(S.λnum)))
+  else
+    return pop!(S.tmatrix)
+  end
+end
+
+function poly_coeffs(ZT, a, g)
+  return ZT[numerator(divexact(coeff(a, i), g)) for i in 0:degree(a)]
+end
+
+function set!(z::fmpz, a::fmpz)
+  ccall((:fmpz_set, libflint), Nothing,
+        (Ref{fmpz}, Ref{fmpz}),
+        z, a)
+end
+
+function pow!(z::fmpz, a::fmpz, b::Int)
+  ccall((:fmpz_pow_ui, libflint), Nothing,
+        (Ref{fmpz}, Ref{fmpz}, UInt),
+        z, a, UInt(b))
+end
+
+function poly_eval!(res::T, a::Vector{T}, x::Int) where T
+  n = length(a)
+  if n < 1
+    zero!(res)
+  elseif n == 1
+    set!(res, a[n])
+  else
+    mul!(res, a[n], x)
+    add!(res, res, a[n-1])
+    while ((n -= 1) > 1)
+      mul!(res, res, x)
+      add!(res, res, a[n - 1])
+    end
+  end
+  return res
+end
+
+
+# out: put sum [N0, N1) in (S.Σ, S.M)
 function sum_bs_start(
   eq::Matrix{PT}, den::PT,
   z::BiElem{T},
@@ -2010,205 +2156,240 @@ function sum_bs_start(
     g = gcd(g, content(eq[i,j]))
   end
 
-  eqnum = PZT[map_coeffs(numerator, divexact(eq[i,j], g), parent=ZFθ) for i in 1:s, j in 1:τ]
-  eqden::PZT = map_coeffs(numerator, divexact(den, g), parent=ZFθ)
+  eqnum = Vector{ZT}[poly_coeffs(ZT, eq[i,j], g) for i in 1:s, j in 1:τ]
+  eqden = poly_coeffs(ZT, den, g)
 
   λnum::ZT = numerator(λ)
   λden::ZT = denominator(λ)
 
   biz = z.isexact ? BiFrac{ZT}(numerator(z.exact), denominator(z.exact), ZF) :
                     BiFrac{ZT}(z.approx, ZF)
-  (Σ, M) = sum_bs_der_recursive(eqnum, eqden, biz, λnum, λden, δ, N1, N0, Φ)
-  Σp = BiMatrix{ZT}(δ, s, τ, ZF)
-  Δ = BiMatrix{ZT}(δ, s, τ, ZF)
-  return SumBsCtx{ZT, PZT}(N0, N1, eqnum, eqden, biz, λnum, λden, Σ, Σp, Δ, M)
 
+  S = SumBsCtx{ZT}(s, τ, δ, eqnum, eqden, biz, λnum, λden,
+                        BiMatrix{ZT}(δ, s, τ, ZF),
+                        BiMatrix{ZT}(s, s, τ, ZF),
+                        BiMatrix{ZT}(δ, s, τ, ZF),
+                        BiMatrix{ZT}(δ, s, τ, ZF),
+                        BiMatrix{ZT}(s, s, τ, ZF),
+                        BiMatrix{ZT}[],
+                        [ZF() for i in 1:s, j in 1:τ], ZF(),
+                        [ZF() for i in 1:τ],
+                        ZF(), ZF(), ZF(), ZF(), ZF(),
+                        nacb(), nacb(), nacb())
+
+  sum_bs_der_recursive(S, N1, N0, Φ)
+  return S
 end
-
 
 function sum_bs_continue(
-  S::SumBsCtx{ZT, PZT},
-  N::Int,
-  Φ::Int) where {ZT, PZT}
-
-  (δ, s, τ) = size(S.Σcurr.approx)
-  (Σ, S.M, S.Δ) = sum_bs_der_continue(S.eqnum, S.eqden, S.z, S.λnum, S.λden,
-                                      δ, N, S.N1, S.N0, S.Σcurr, S.M, Φ)
-  (S.Σcurr, S.Σprev) = (Σ, S.Σcurr)
-  S.N1 = N
-
-  return overlap_dist(get_approx(S.Σcurr, Φ),
-                      get_approx(S.Δ, Φ),
-                      get_approx(S.Σprev, Φ), Φ)
-end
-
-function get_sum(S::SumBsCtx, Φ::Int)
-  return get_approx(S.Σcurr, Φ)
-end
-
-# let f(z) = Σ_{N0≤i<N1, 0≤j<τ} u[i,j]*z^(λ+i)*log(z)^j/j!
-# return [z^(d-N0-λ)*f^(d)(z)]_{0≤d<δ} as a δxs matrix of acb_poly in Λ
-function sum_bs_der(
-  eq::Matrix{PT}, den::PT,  # size sxτ
-  z::BiFrac{T},
-  λnum::T, λden::T,
-  δ::Int,
-  N1::Int, N0::Int,
-  Φ::Int) where {PT, T}
-
-  return sum_bs_der_recursive(eq, den, z, λ, δ, N1, N0, Φ)
-end
-
-function sum_bs_der_continue(
-  eq::Matrix{PT}, den::PT,  # size sxτ
-  z::BiFrac{T},
-  λnum::T, λden::T,
-  δ::Int,
+  S::SumBsCtx{ZT},
   hi::Int, mid::Int, lo::Int,
-  Σ0::BiMatrix{T}, M0::BiMatrix{T},
-  Φ::Int) where {T, PT}
+  Φ::Int) where {ZT}
 
-  (s, τ) = size(eq)
-  F = parent(λnum)
-  Σ1, M1 = sum_bs_der_recursive(eq, den, z, λnum, λden, δ, hi, mid, Φ)
-  Δ = mullow(Σ1, M0, Φ)
-  limit_prec(Δ, Φ)
-  Σ = BiMatrix{T}(δ, s, τ, F)
-  if z.isexact && Δ.isexact && Σ0.isexact
-    # Σ0n/Σ0d + Δn/Δd * zn^k/zd^k = Σ0n/Σ0d + Σ1/Σ1d*M0/M0d * zn^k/zd^k
-    # M0d should "divide" Σ0d
-    zdenk = z.den^(mid-lo)
-    znumk = z.num^(mid-lo)
-    Σ.den = zdenk*Σ0.den*Σ1.den
-    mul!(Σ.num, Δ.num, divexact(Σ0.den, M0.den)*znumk)
-    addmul!(Σ.num, Σ0.num, Σ1.den*zdenk)
-    limit_prec(Σ, Φ)
-    Δ.den = Δ.den*zdenk
-    mul!(Δ.num, Δ.num, znumk)
-  else
-    force_approx(Δ, Φ)
-    mul!(Δ.approx, pow(get_approx(z, Φ), mid-lo, Φ), Φ)
-    Σ.isexact = false
-    Σ.haveapprox = true
-    add!(Σ.approx, get_approx(Σ0, Φ), Δ.approx, Φ)
-  end
-  M = mullow(M1, M0, Φ)
-  limit_prec(M, Φ)
-  return (Σ, M, Δ)
+  (S.Σ0, S.Σ) = (S.Σ, S.Σ0)
+  (S.M0, S.M) = (S.M, S.M0)
+  sum_bs_der_continue(S, hi, mid, lo, Φ)
+
+  return overlap_dist(_get_approx(S.Σ, Φ, S.ta1, S.ta2),
+                      _get_approx(S.Δ, Φ, S.ta1, S.ta2),
+                      _get_approx(S.Σ0, Φ, S.ta1, S.ta2), Φ)
 end
 
+#  in: sum [lo, mid) is in (S.Σ0, S.M0)
+# out: put sum [lo, hi) in (S.Σ, S.M)
+function sum_bs_der_continue(
+  S::SumBsCtx{ZT},
+  hi::Int, mid::Int, lo::Int,
+  Φ::Int) where {ZT}
+
+  (Σ0, M0) = pop_tmatrix(S)
+  (S.Σ0, Σ0) = (Σ0, S.Σ0)
+  (S.M0, M0) = (M0, S.M0)
+
+  sum_bs_der_recursive(S, hi, mid, Φ)
+
+  (Σ1, M1) = pop_tmatrix(S)
+  (S.Σ, Σ1) = (Σ1, S.Σ)
+  (S.M, M1) = (M1, S.M)
+
+  mullow!(S.Δ, Σ1, M0, Φ, S.ta1, S.ta2)
+  limit_prec(S.Δ, Φ, S.ta1, S.ta2)
+  if S.z.isexact && S.Δ.isexact && Σ0.isexact
+    pow!(S.tzd, S.z.den, mid-lo)
+    pow!(S.tzn, S.z.num, mid-lo)
+    S.Σ.isexact = true
+    S.Σ.haveapprox = false
+    S.Σ.den = S.tzd*Σ0.den*Σ1.den
+    divexact!(S.t2, Σ0.den, M0.den)
+    mul!(S.t3, S.t2, S.tzn)
+    mul!(S.Σ.num, S.Δ.num, S.t3)
+    addmul!(S.Σ.num, Σ0.num, Σ1.den*S.tzd)
+    limit_prec(S.Σ, Φ, S.ta1, S.ta2)
+    mul!(S.Δ.den, S.Δ.den, S.tzd)
+    mul!(S.Δ.num, S.Δ.num, S.tzn)
+  else
+    force_approx(S.Δ, Φ, S.ta1, S.ta2)
+    pow!(S.ta, get_approx(S.z, Φ), mid-lo, Φ)
+    mul!(S.Δ.approx, S.ta, Φ)
+    S.Σ.isexact = false
+    S.Σ.haveapprox = true
+    add!(S.Σ.approx, get_approx(Σ0, Φ), S.Δ.approx, Φ)
+  end
+  mullow!(S.M, M1, M0, Φ, S.ta1, S.ta2)
+  limit_prec(S.M, Φ, S.ta1, S.ta2)
+
+  push_tmatrix(S, (Σ1, M1))
+
+  (S.Σ0, Σ0) = (Σ0, S.Σ0)
+  (S.M0, M0) = (M0, S.M0)
+  push_tmatrix(S, (Σ0, M0))
+end
+
+# out: put sum from [lo, hi) in (S.Σ, S.M)
 function sum_bs_der_recursive(
-  eq::Matrix{PT}, den::PT,  # size sxτ
-  z::BiFrac{T},
-  λnum::T, λden::T,
-  δ::Int,
+  S::SumBsCtx{ZT},
   hi::Int, lo::Int,
-  Φ::Int) where {T, PT}
+  Φ::Int) where {ZT}
 
   @assert hi>lo
 
-  if hi > lo + (z.isexact ? 10 : 1)
+  if hi > lo + (S.z.isexact ? 10 : 1)
     mid = cld(hi+lo,2)
-    (Σ0, M0) = sum_bs_der_recursive(eq, den, z, λnum, λden, δ, mid, lo, Φ)
-    (Σ, M, Δ) = sum_bs_der_continue(eq, den, z, λnum, λden, δ, hi, mid, lo, Σ0, M0, Φ)
-    return (Σ, M)
+    sum_bs_der_recursive(S, mid, lo, Φ)
+    (S.Σ0, S.Σ) = (S.Σ, S.Σ0)
+    (S.M0, S.M) = (S.M, S.M0)
+    sum_bs_der_continue(S, hi, mid, lo, Φ)
+    return
   end
 
-  (s, τ) = size(eq)
-  F = parent(λnum)
+  F = parent(S.λnum)
 
-  Σ = BiMatrix{T}(δ, s, τ, F)
-  M = BiMatrix{T}(s, s, τ, F)
+  (s, τ, δ) = (S.s, S.τ, S.δ)
+  Σ = S.Σ
+  M = S.M
+  Σ.isexact = true
+  Σ.haveapprox = false
+  M.isexact = true
+  M.haveapprox = false
 
-  de = evaluate(den, lo)
-  M.den = de
+  for d in 1:δ, j in 1:s, k in 1:τ
+    zero!(Σ.num[d,j,k])
+  end
+  one!(Σ.den)
+
+  for i in 1:s, j in 1:s, k in 1:τ
+    zero!(M.num[i,j,k])
+  end
+  one!(M.den)
+
+
+  poly_eval!(M.den, S.eqden, lo)
   for j in 1:s, k in 1:τ
-    M.num[1,j,k] = evaluate(eq[j,k], lo)
+    poly_eval!(M.num[1,j,k], S.eqnum[j,k], lo)
   end
   for i in 2:s
-    M.num[i,i-1,1] = deepcopy(de)
+    set!(M.num[i,i-1,1], M.den)
   end
 
-  ff = T[λden^(δ-1)]  # λden^(δ-1)*(Λ+λ+n-0)*(Λ+λ+n-1)*...*(Λ+λ+n-(d-1))
-  mul!(Σ.den, ff[1+0], de)
+  # ff = λden^(δ-1)*(Λ+λ+n-0)*(Λ+λ+n-1)*...*(Λ+λ+n-(d-1))
+  fflen = 1
+  pow!(S.tff[1], S.λden, δ-1)
+
+  mul!(Σ.den, S.tff[1], M.den)
   for j in 1:s, k in 1:τ
-    mul!(Σ.num[1,j,k], ff[1+0], M.num[1,j,k])
+    mul!(Σ.num[1,j,k], S.tff[1], M.num[1,j,k])
   end
+
   for d in 1:δ-1
-    shift = (lo-(d-1))*λden+λnum
+    mul!(S.t1, S.λden, lo-(d-1))
+    add!(S.t1, S.t1, S.λnum)
     # ff *= lo-(d-1)+λ + Λ
-    for i in 1:length(ff)
-      divexact!(ff[i], ff[i], λden)
+    for i in 1:fflen
+      divexact!(S.tff[i], S.tff[i], S.λden)
     end
-    for i in length(ff):-1:1
-      mul!(ff[i], ff[i], shift)
-      i == 1 || addmul!(ff[i], ff[i-1], λden)
+    for i in fflen:-1:1
+      mul!(S.tff[i], S.tff[i], S.t1)
+      i == 1 || addmul!(S.tff[i], S.tff[i-1], S.λden)
     end
-    length(ff) >= τ || push!(ff, λden^(δ-1))
+    if fflen < τ
+      fflen += 1
+      pow!(S.tff[fflen], S.λden, δ-1)
+    end
     for j in 1:s, k in 0:τ-1, l in 0:k
-      addmul!(Σ.num[1+d,j,1+k], ff[1+l], M.num[1,j,1+k-l])
+      addmul!(Σ.num[1+d,j,1+k], S.tff[1+l], M.num[1,j,1+k-l])
     end
   end
 
   if lo+1==hi
-    return (Σ, M)
+    return
   end
 
-  @assert z.isexact
+  @assert S.z.isexact
 
-  tt = [zero(F) for k in 1:τ]
   for n in lo+1:hi-1
     # update M
-    de = evaluate(den, n)
-    ne = T[evaluate(eq[i,k], n) for i in 1:s, k in 1:τ]
+    poly_eval!(S.tdeneval, S.eqden, n)
+    for i in 1:s, k in 1:τ
+      poly_eval!(S.tnumeval[i,k], S.eqnum[i,k], n)
+    end
     for j in 1:s
       # update column j
       for k in 0:τ-1
-        zero!(tt[1+k])
+        zero!(S.tff[1+k])
       end
       for k in 0:τ-1, h in 0:k
-        addmul!(tt[1+k], ne[1,1+h], M.num[1,j,1+k-h])
+        addmul!(S.tff[1+k], S.tnumeval[1,1+h], M.num[1,j,1+k-h])
       end
       for i in s:-1:2
         for k in 0:τ-1, h in 0:k
-          addmul!(tt[1+k], ne[i,1+h], M.num[i,j,1+k-h])
+          addmul!(S.tff[1+k], S.tnumeval[i,1+h], M.num[i,j,1+k-h])
         end
         for k in 0:τ-1
-          mul!(M.num[i,j,1+k], de, M.num[i-1,j,1+k])
+          mul!(M.num[i,j,1+k], S.tdeneval, M.num[i-1,j,1+k])
         end
       end
       for k in 0:τ-1
-        (M.num[1,j,1+k], tt[1+k]) = (tt[1+k], M.num[1,j,1+k])
+        (M.num[1,j,1+k], S.tff[1+k]) = (S.tff[1+k], M.num[1,j,1+k])
       end
     end
-    mul!(M.den, M.den, de)
+    mul!(M.den, M.den, S.tdeneval)
 
     # update Σ
-    mul!(Σ.den, Σ.den, z.den*de)
-    mul!(Σ.num, Σ.num, z.den*de)
+    mul!(S.t1, S.tdeneval, S.z.den)
+    mul!(Σ.den, Σ.den, S.t1)
+    mul!(Σ.num, Σ.num, S.t1)
     # Σ.num += zn^(n-lo)*ff*M.num
-    ff = T[λden^(δ-1)*z.num^(n-lo)]  # zn^(n-lo)*λd^(δ-1)*(Λ+λ+n-0)*(Λ+λ+n-1)*...*(Λ+λ+n-(d-1))
+
+    # ff = zn^(n-lo)*λd^(δ-1)*(Λ+λ+n-0)*(Λ+λ+n-1)*...*(Λ+λ+n-(d-1))
+    fflen = 1
+    pow!(S.tff[1], S.z.num, n-lo)
+    pow!(S.t1, S.λden, δ-1)
+    mul!(S.tff[1], S.tff[1], S.t1)
     for j in 1:s, k in 1:τ
-      addmul!(Σ.num[1,j,k], ff[1+0], M.num[1,j,k])
+      addmul!(Σ.num[1,j,k], S.tff[1+0], M.num[1,j,k])
     end
     for d in 1:δ-1
-      shift = (n-(d-1))*λden + λnum
+      mul!(S.t1, S.λden, n-(d-1))
+      add!(S.t1, S.t1, S.λnum)
       # ff *= n-(d-1)+λ + Λ
-      for i in 1:length(ff)
-        divexact!(ff[i], ff[i], λden)
+      for i in 1:fflen
+        divexact!(S.tff[i], S.tff[i], S.λden)
       end
-      for i in length(ff):-1:1
-        mul!(ff[i], ff[i], shift)
-        i == 1 || addmul!(ff[i], ff[i-1], λden)
+      for i in fflen:-1:1
+        mul!(S.tff[i], S.tff[i], S.t1)
+        i == 1 || addmul!(S.tff[i], S.tff[i-1], S.λden)
       end
-      length(ff) >= τ || push!(ff, λden^(δ-1)*z.num^(n-lo))
+      if fflen < τ
+        fflen += 1
+        pow!(S.tff[fflen], S.λden, δ-1)
+      end
       for j in 1:s, k in 0:τ-1, l in 0:k
-        addmul!(Σ.num[1+d,j,1+k], ff[1+l], M.num[1,j,1+k-l])
+        addmul!(Σ.num[1+d,j,1+k], S.tff[1+l], M.num[1,j,1+k-l])
       end
     end
   end
 
-  return (Σ, M)
+  return
 end
 
 
@@ -2668,7 +2849,7 @@ function logzpoly_series(Z::zBranchInfo, δ::Int, τ::Int, Φ::Int)
 end
 
 # z^(λ+n)*Σ_{j<τ}e_j*Λ^(τ-1-j) with Λ^(τ-1-j) replaced by log(z)^j/j!
-function zpowlogpoly_eval(Z::zBranchInfo, n::Int, e::Vector{nacb}, Φ::Int)
+function zpowlogpoly_eval!(Z::zBranchInfo, n::Int, e::Vector{nacb}, Φ::Int)
   τ = length(e)
   if τ<2
     return mul(zpow(Z, n, Φ), e[1+0], Φ)
@@ -3498,6 +3679,11 @@ end
 
 function tail_bound(Pθ, Px, u, ns, αs, Z::zBranchInfo, δ, N, τ, ν, Φ)
 
+  if !@use_tail_bounds()
+    Er = [zero(narb_poly) for l in 1:ν]
+    return Er
+  end
+
   s = length(Pθ) - 1
 
   # for the residual it is required that none of λ+N, λ+N+1, ..., λ+N+s-1 are inidicial roots
@@ -3908,15 +4094,16 @@ function eval_basis_bs(
   NΔ = N1
   while N1 < maxN
     N2 = N1 + clamp(NΔ, fld(N1+100,64), N1)
-    d2 = sum_bs_continue(S, N2, Φ)
+    d2 = sum_bs_continue(S, N2, N1, N0, Φ)
     if d2 < 1
       overlap_count += 1
       NΔ = 10
     else
       overlap_count = 0
-      NΔ = d1-d2 <= 0 ? N1 : trunc(Int, (N2-N1)*0.25*(d2/(d1-d2)))
+      NΔ = d1-d2 <= 0 ? N1 : trunc(Int, (N2-N1)*0.17*(d2/(d1-d2)))
     end
     N1 = N2
+    d1 = d2
     overlap_count < 2 || break
   end
 
@@ -3933,7 +4120,7 @@ function eval_basis_bs(
         add!(fdz[1+k], fdz[1+k], t, Φ)
       end
     end
-    M[1+d,l] = add(M[1+d,l], zpowlogpoly_eval(Z, N0-d, fdz, Φ), Φ)
+    M[1+d,l] = add(M[1+d,l], zpowlogpoly_eval!(Z, N0-d, fdz, Φ), Φ)
   end
 
   # compute u_{N1-1},...,u_{N1-s}
@@ -4567,6 +4754,7 @@ end
 
   z = one(CC)
   @test !isfinite(hypergeometric_pfq([5,4,3],[2,1],z))
+
 end
 
 @testset "algebraic cases" begin
@@ -4680,30 +4868,21 @@ println("************************** benchmarks *******************************")
   bits_lost = 0
 
   bits_lost += run_bench([1//2,1//3,1//5,1//4],[8//7,1//6,1//9], 1//10, 20, "[1.04165510107809208771 +/- 2.43e-21]", "[+/- 2.07e-24]")
-
   bits_lost += run_bench([1//2,1//3,1//5,1//4],[8//7,1//6,1//9],-1+im//300, 200, "[0.7361464107568699653654181932021195729016525520251669994612965514688945567873978145804140256340981534032171785111170341312718204804372620880207341602115123749944939921894542469460886808720225689828743232125 +/- 7.05e-206]", "[0.0006091142434506593619507708486086804762150980760156332916347162351588534898343587334997033663903136796976875663495423707271793534625090625898822976732269967397826684043934917897380440587935220808422516 +/- 1.57e-203]")
   bits_lost += run_bench([1//2,1//3,1//5,1//4],[8//7,1//6,1//9],1//300+im, 200, "[0.853498211060579954490363364784481268197877903709746131856530610099120791429240016786586006359060701719614321941609976993732551828969874878632105881859561180925930687147324142274043333887472085663429960 +/- 4.43e-202]", "[0.302235718305177081880438308463901805943967344220865402810895162185350037204941683860825775142412188198314838346748247659487319633322537866130218549109342613855275799727201394499484865564020106350734127 +/- 2.99e-202]")
-
   bits_lost += run_bench([1//2,1//3,1//5,1//4],[8//7,1//6,1//9], 11//10, 100, "[2.09473837006811761028534487482955095697725399923738208299473100086979606619943028860894705913795820 +/- 2.23e-99]", "[-1.32063424488884879145689203640820495365830310353133670921975318942279074195339938129952186569083161 +/- 3.11e-99]")
   bits_lost += run_bench([1//2,1//3,1//5,1//4],[8//7,1//6,409//420], 11//10, 100, "[1.10012992690145570229907705218466524693847390580609878681247630305435529779555060922581931979395195 +/- 7.02e-100]", "[-0.019650631936840220248345681395791981619880186753148199866219643526635725512689324474868785073820769 +/- 1.99e-100]")
-
   bits_lost += run_bench([1//2,1//3,1//5,1//4],[8//7,1//6,1//9], 21//10+im, 100, "[0.71474921490254889156840981949000811062050067188575315042564339656971171954121748902674586037861411 +/- 4.77e-99]", "[0.9781249447537276082866697472831284801654120848168295066054521588403569889034210483850430568298298 +/- 3.56e-98]")
-
   bits_lost += run_bench([1//2,1//3,1//5,1//4],[8//7,1//6,10//9], 21//10, 100, "[1.09611960714180653165793929034538750471702782740589204327790995048489804128469673421588286818944088 +/- 2.55e-99]", "[-0.1103381390329406104849629727151339938760273060221215999605687131539917991045753083253694103910355 +/- 4.15e-98]")
-
   bits_lost += run_bench([1//2,1//3,3//2,3//2],[8//7,1//6,409//420], 21//10*im, 100, "[-0.3836936156357715109532470008774342030087022878339141902193492463878637848072764973662114392423830 +/- 3.82e-98]", "[0.3510560688879407205546122233658260321782263643876690384980560383966660407148203677984173909952239 +/- 4.45e-98]")
-
   bits_lost += run_bench([1//2,1//3,3//2,3//2],[8//7,1//6,7//2+1//4], 21//10*im, 100, "[0.498286277362499154454672287676933977606853722206194319858084629633516142945046940166960257970613 +/- 3.22e-97]", "[0.5388483851104630403622090287525048639997504587807914458817597010957463072020568473516818023683285 +/- 4.40e-98]")
-
   bits_lost += run_bench([1//2,1//3,3//2,3//2],[8//7,1//6,409//420], 21//10, 100, "[-0.3778888881782393774553127309816076760288807629794011361623259687233181125952890271460921393790923 +/- 1.00e-98]", "[1.0324057197731830866862412722661912510450592489443071095814531303361891341977524868140295288542887 +/- 3.18e-98]")
-
   bits_lost += run_bench([1//2,1//3,3//2,3//2],[8//7,1//6,7//2+1//4], 21//10, 100, "[0.5587476752887922757498928650974538228321146670224016380361419696854589138256157940556936141300072 +/- 7.32e-98]", "[-2.649787031624682836178763161718415233309248545654569640464561282640046441505973680884328801960931 +/- 1.55e-97]")
   bits_lost += run_bench([1//2,1//3,3//2,5//2],[8//7,1//6,7//2+1//4], 21//10, 100, "[-1.799478585201052861552266948753576293798081804909492183540383822249557260558139389282027739306081 +/- 2.29e-97]", "[-2.0550213095299542518482540717224091776461005489751204129826789474740506081260337268088507033546378 +/- 5.82e-98]")
   bits_lost += run_bench([1//2,1//3,1//3,3//2,3//2],[8//7,1//6,7//2+1//5,1//4], 21//10, 100, "[-0.116857050064488324880005256242593338635544257506370503116752352065017363357264920954229325317036 +/- 5.51e-97]", "[-3.515406819990606948896449062181976165047281121147375761111710596644569438443262697365115597303044 +/- 2.31e-97]")
   bits_lost += run_bench([1//2,1//3,1//3,3//2,3//2,4//3],[8//7,1//6,7//2,1//4,1//5], 21//10, 100, "[-19.9404485154538633201163293612929060982693170333095030435564215171671004250390889987049810825485 +/- 2.54e-95]", "[17.0022670479727611109224091973883810218739134352957349354752346919984236719406436188027263944349 +/- 4.04e-95]")
   bits_lost += run_bench([1//2,1//3,1//3,3//2,3//2,4//3],[8//7,1//6,7//2,1//4,5+1//5], 101//100, 100)
   bits_lost += run_bench([1,1,2,2,3],[3//2,3//2,3//2,3//2], 21//10, 100, "[-0.51585621412817788953636435138740344792545648221588737349075642969025142618998460938638704600278106 +/- 3.91e-99]", "[-0.05470891931824783630344691907005460888039986744824234445189809615982014632842245019368879129590597 +/- 3.12e-99]")
-
   bits_lost += run_bench([-2,1,2,2,3],[4//3,4//3,4//3,4//3], 21//10, 100, "[25.724630102040816326530612244897959183673469387755102040816326530612244897959183673469387755102041 +/- 2.05e-97]")
 
   println("total: ", time()-t1)
@@ -4713,8 +4892,13 @@ end
 function run_heuristics()
 println()
 println("************************** heuristics *******************************")
-  for (z, limit) in [(1, 50000), (1-1//50, 11000)]
-    d = 10
+  if @debug()
+    fac = 1
+  else
+    fac = 100
+  end
+  for (z, limit) in [(1, 250*fac), (1-1//50, 60*fac)]
+    d = 20
     while (d = 2*d) <= limit
       m = trunc(Int, d*4.0)
       N = trunc(Int, d*1.0)
@@ -4740,7 +4924,185 @@ end
 
 run_tests()
 run_benchmarks()
+run_benchmarks()
 run_heuristics()
+
+
+
+println()
+println("************************ bad borel sum ****************************")
+
+function rescale(Aθ::Vector, s)
+
+  Fθ = parent(Aθ[1])
+  θ = gen(Fθ)
+  F = base_ring(Fθ)
+  Fx, x = PolynomialRing(F, "x")
+  Ax = transpose_vars(Aθ, Fx)
+
+  x = gen(Fx)
+  ra = length(Ax) - 1
+  eq = elem_type(Fx)[Ax[1+ra]]
+  for k in ra-1:-1:0
+    eq = elem_type(Fx)[
+          ((i<length(eq)) ? x*derivative(eq[1+i]) : zero(Fx)) +
+          ((i > 0) ? eq[1+i-1] : Ax[1+k])
+        for i in 0:length(eq)]
+  end
+
+  eq = map(p -> evaluate(p, s*x), eq)
+
+  # cancel content while θ is on the right
+  c = map(p -> p, eq)
+  cont = zero(Fx)
+  for ci in c
+    cont = gcd(cont, ci)
+  end
+  c = elem_type(Fx)[divexact(ci, cont) for ci in c]
+
+  # move θ to the left
+  Cx = elem_type(Fx)[]
+  for ci in reverse(c)
+    equ_mul_θ_add!(Cx, ci, Fx)
+  end
+  return transpose_vars(Cx, Fθ)
+end
+
+
+# a0(x)*(xf) + a1(x)*θ(xf) + a2(x)*θθ(xf) = 0
+# θg = xf
+# θθg = θxf
+# int(f) = g
+function integrate(Aθ::Vector)
+  Fθ = parent(Aθ[1])
+  θ = gen(Fθ)
+  F = base_ring(Fθ)
+  Fx, x = PolynomialRing(F, "x")
+  Ax = transpose_vars(Aθ, Fx)
+
+  Fx = parent(Ax[1])
+  x = gen(Fx)
+  ra = length(Ax) - 1
+  eq = elem_type(Fx)[Ax[1+ra]]
+  for k in ra-1:-1:0
+    eq = elem_type(Fx)[
+          ((i<length(eq)) ? x*derivative(eq[1+i])-eq[1+i] : zero(Fx)) +
+          ((i > 0) ? eq[1+i-1] : Ax[1+k])
+        for i in 0:length(eq)]
+  end
+
+  pushfirst!(eq, zero(Fx))
+
+  # cancel content while θ is on the right
+  c = map(p -> p, eq)
+  cont = zero(Fx)
+  for ci in c
+    cont = gcd(cont, ci)
+  end
+  c = elem_type(Fx)[divexact(ci, cont) for ci in c]
+
+  # move θ to the left
+  Cx = elem_type(Fx)[]
+  for ci in reverse(c)
+    equ_mul_θ_add!(Cx, ci, Fx)
+  end
+  return transpose_vars(Cx, Fθ), Cx
+end
+
+function shift(Aθ::Vector, s)
+  Fθ = parent(Aθ[1])
+  θ = gen(Fθ)
+  F = base_ring(Fθ)
+  Fx, x = PolynomialRing(F, "x")
+  Ax = transpose_vars(Aθ, Fθ)
+
+  FFx = FractionField(Fx)
+
+  eq = elem_type(FFx)[]
+  for k in length(Aθ):-1:1
+    # y = x + s
+    # θ_x = (1-s/y) θ_y
+    # apply θ_x and add Ax[k]
+    # (1-s/y) θ (Σ_i c_i(y)*θ^i(g))
+    # = (1-s/y) θ (Σ_i c_i(y)*θ^i(g))
+    # = Σ_i (1-s/y) y d/dy (c_i(y)*θ^i(g))
+    # = Σ_i (1-s/y) (y*c_i'(y)*θ^i(g) + c_i(y)*θ^{i+1}(g))
+    eq = elem_type(FFx)[(
+          ((i<length(eq)) ? (x+s)*derivative(eq[1+i]) : zero(FFx)) +
+          ((i > 0) ? (x+s)//x*eq[1+i-1] : FFx(evaluate(Ax[k], x+s))))
+        for i in 0:length(eq)]
+  end
+
+  # cancel content while θ is on the right
+  c = map(p -> (numerator(p), denominator(p)), eq)
+  cont = zero(Fx)
+  den = one(Fx)
+  for ci in c
+    cont = gcd(cont, ci[1])
+    den = lcm(den, ci[2])
+  end
+  c = elem_type(Fx)[divexact(ci[1], cont)*divexact(den, ci[2]) for ci in c]
+
+  # move θ to the left
+  Cx = elem_type(Fx)[]
+  for ci in reverse(c)
+    equ_mul_θ_add!(Cx, ci, Fx)
+  end
+  return transpose_vars(Cx, Fθ), Cx
+end
+
+
+
+let T = fmpq, Φ = 200, CC = AcbField(Φ), a = T[QQ(1), QQ(1)], b = T[]
+  zz = fmpq(-1//10)
+  z = CC(zz)
+
+println("a = $a   b = $b   z = $zz")
+
+
+  F = parent(a[1])
+  Fx, x = PolynomialRing(F, "x")
+  # 0 -> z
+  Pθ, Px = hyp_equ(a, b, Fx(0)//Fx(1), x//Fx(1))
+  Fθ = parent(Pθ[1])
+  θ = gen(Fθ)
+
+  # eq for f(t)
+  eq = hadamard_product(Pθ, [θ, Fθ(-1)])
+  eq = θ .* eq  # hmmm.... bad corner case
+
+  # eq for f(z*t)
+  eq = rescale(eq, zz)
+
+  # eq for exp(-t)*f(z*t)
+  eq = cauchy_product(eq, [θ, Fθ(1)])
+
+  # eq for int exp(-t)*f(z*t) dt
+  # singular points at t = 0, t = 1/z, and t = inf
+  Pθ, Px = integrate(eq)
+
+  zi = 2
+  e = eval_basis(Pθ, Px, zBranchInfo{T}(F(0), F(2)), [fmpz(0), fmpz(1)], [F(0), F(1)], 2, Φ)
+println("integral from 0 to $zi:")
+@show e[1,2]
+@show e[2,2]
+
+  while zi < 150
+    nzi = zi + 1 + cld(zi, 3)
+    nPθ, nPx = shift(Pθ, F(zi))
+    e1 = eval_basis(nPθ, nPx, zBranchInfo{T}(F(0), F(nzi-zi)), [fmpz(0), fmpz(1)], [F(0), F(1)], 2, Φ)
+    e = mul(e1, e, Φ+20)
+    zi = nzi
+println("integral from 0 to $zi:")
+@show e[1,2]
+@show e[2,2]
+  end
+
+println("real answer:")
+@show hypergeometric_pfq(a,b,z)
+
+end
+
 
 nothing
 
